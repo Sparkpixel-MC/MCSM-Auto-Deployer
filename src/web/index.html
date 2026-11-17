@@ -1,0 +1,2847 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="m3dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#141218">
+  <meta name="description" content="MCSM-Auto-Deployer — GitHub Release 自动部署控制台">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23141218'/%3E%3Cpath d='M12 4 5 8v8l7 4 7-4V8l-7-4Zm0 2.2 4.9 2.8-4.9 2.8-4.9-2.8 4.9-2.8ZM7 10.2l4 2.3v4.2l-4-2.3v-4.2Zm10 0v4.2l-4 2.3v-4.2l4-2.3Z' fill='%23D0BCFF'/%3E%3C/svg%3E">
+  <title>MCSM-Auto-Deployer · 自动部署控制台</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Flex:opsz,wght@8..144,400..800&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      --color-md-primary: #D0BCFF;
+      --color-md-on-primary: #381E72;
+      --color-md-primary-container: #4F378B;
+      --color-md-on-primary-container: #EADDFF;
+      --color-md-secondary: #CCC2DC;
+      --color-md-secondary-container: #4A4458;
+      --color-md-tertiary: #EFB8C8;
+      --color-md-tertiary-container: #633B48;
+      --color-md-surface: #141218;
+      --color-md-surface-container: #211F26;
+      --color-md-surface-container-high: #2B2930;
+      --color-md-on-surface: #E6E0E9;
+      --color-md-on-surface-variant: #CAC4D0;
+      --color-md-outline-variant: #49454F;
+      --color-md-error: #F2B8B5;
+      --radius-md-card: 12px;
+      --radius-md-btn: 20px;
+      --radius-md-fab: 16px;
+      --radius-md-dialog: 28px;
+      --font-display: "Roboto Flex", "Inter", "Noto Sans SC", sans-serif;
+      --font-body: "Inter", "Noto Sans SC", sans-serif;
+      --font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+      --ease-md: cubic-bezier(0.2, 0, 0, 1);
+    }
+  </style>
+
+  <style>
+    /* =====================================================================
+       Material Design 3 tokens — Baseline Dark, seeded from #6750A4.
+       All component colors resolve through these role tokens.
+       ===================================================================== */
+    :root {
+      --md-source: #6750A4;
+      --md-primary: #D0BCFF;
+      --md-on-primary: #381E72;
+      --md-primary-container: #4F378B;
+      --md-on-primary-container: #EADDFF;
+      --md-secondary: #CCC2DC;
+      --md-on-secondary: #332D41;
+      --md-secondary-container: #4A4458;
+      --md-on-secondary-container: #E8DEF8;
+      --md-tertiary: #EFB8C8;
+      --md-on-tertiary: #492532;
+      --md-tertiary-container: #633B48;
+      --md-on-tertiary-container: #FFD8E4;
+      --md-error: #F2B8B5;
+      --md-on-error: #601410;
+      --md-error-container: #8C1D18;
+      --md-on-error-container: #F9DEDC;
+      --md-background: #141218;
+      --md-surface: #141218;
+      --md-on-surface: #E6E0E9;
+      --md-surface-variant: #49454F;
+      --md-on-surface-variant: #CAC4D0;
+      --md-outline: #938F99;
+      --md-outline-variant: #49454F;
+      --md-surface-container-lowest: #0F0D13;
+      --md-surface-container-low: #1D1B20;
+      --md-surface-container: #211F26;
+      --md-surface-container-high: #2B2930;
+      --md-surface-container-highest: #36343B;
+      --md-inverse-surface: #E6E0E9;
+      --md-inverse-on-surface: #313033;
+      --md-inverse-primary: #6750A4;
+      --md-scrim: rgba(0, 0, 0, 0.68);
+      --md-ok: #B7E1A1;
+      --md-ok-container: #2A441F;
+      --md-on-ok-container: #C9F2B2;
+      --md-warning: #F5DBA4;
+      --md-warning-container: #493B16;
+      --md-on-warning-container: #FCE8B2;
+
+      --md-font-display: "Roboto Flex", "Inter", "Noto Sans SC", sans-serif;
+      --md-font-body: "Inter", "Noto Sans SC", sans-serif;
+      --md-font-mono: "Roboto Mono", "SFMono-Regular", Consolas, monospace;
+
+      --md-shape-card: 12px;
+      --md-shape-btn: 20px;
+      --md-shape-fab: 16px;
+      --md-shape-dialog: 28px;
+      --md-ease: cubic-bezier(0.2, 0, 0, 1);
+      --md-duration-short: 150ms;
+      --md-duration-medium: 250ms;
+      --md-duration-long: 300ms;
+
+      --topbar-height: 64px;
+      --log-height: clamp(236px, 35vh, 380px);
+      --log-collapsed-height: 54px;
+      --log-dock-height: var(--log-height);
+      --content-pad: 24px;
+    }
+
+    /* DaisyUI 5 semantic bridge. depth=0 deliberately disables its shadows. */
+    [data-theme="m3dark"] {
+      color-scheme: dark;
+      --color-base-100: #141218;
+      --color-base-200: #211F26;
+      --color-base-300: #2B2930;
+      --color-base-content: #E6E0E9;
+      --color-primary: #D0BCFF;
+      --color-primary-content: #381E72;
+      --color-secondary: #CCC2DC;
+      --color-secondary-content: #332D41;
+      --color-accent: #EFB8C8;
+      --color-accent-content: #492532;
+      --color-neutral: #49454F;
+      --color-neutral-content: #E6E0E9;
+      --color-info: #A8C7FA;
+      --color-info-content: #002F6C;
+      --color-success: #B7E1A1;
+      --color-success-content: #12300A;
+      --color-warning: #F5DBA4;
+      --color-warning-content: #3D2E00;
+      --color-error: #F2B8B5;
+      --color-error-content: #601410;
+      --radius-selector: 9999px;
+      --radius-field: 12px;
+      --radius-box: 12px;
+      --border: 1px;
+      --depth: 0;
+      --noise: 0;
+
+      /* DaisyUI 4 compatibility tokens */
+      --p: #D0BCFF;
+      --pc: #381E72;
+      --s: #CCC2DC;
+      --sc: #332D41;
+      --a: #EFB8C8;
+      --ac: #492532;
+      --n: #49454F;
+      --nc: #E6E0E9;
+      --b1: #141218;
+      --b2: #211F26;
+      --b3: #2B2930;
+      --bc: #E6E0E9;
+      --in: #A8C7FA;
+      --inc: #002F6C;
+      --su: #B7E1A1;
+      --suc: #12300A;
+      --wa: #F5DBA4;
+      --wac: #3D2E00;
+      --er: #F2B8B5;
+      --erc: #601410;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      box-shadow: none !important;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      background: var(--md-surface);
+      scrollbar-color: var(--md-outline-variant) transparent;
+    }
+
+    body {
+      overflow: hidden;
+      font-family: var(--md-font-body);
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--md-on-surface);
+      background-color: var(--md-surface);
+      background-image:
+        radial-gradient(1100px 520px at 88% -18%, color-mix(in srgb, var(--md-primary) 7%, transparent), transparent 64%),
+        radial-gradient(900px 520px at -8% 108%, color-mix(in srgb, var(--md-secondary) 5%, transparent), transparent 62%);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+      background: color-mix(in srgb, var(--md-primary) 32%, transparent);
+      color: var(--md-on-surface);
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      color: inherit;
+    }
+
+    a {
+      color: var(--md-primary);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 3px;
+    }
+
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--md-outline) 44%, transparent);
+      border: 3px solid transparent;
+      border-radius: 999px;
+      background-clip: padding-box;
+    }
+
+    .icon {
+      width: 20px;
+      height: 20px;
+      display: inline-block;
+      flex: none;
+      fill: currentColor;
+      vertical-align: middle;
+    }
+
+    .icon-sm { width: 16px; height: 16px; }
+    .icon-lg { width: 24px; height: 24px; }
+    .icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+    .truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mono { font-family: var(--md-font-mono); }
+    .muted { color: var(--md-on-surface-variant); }
+
+    .app-shell {
+      height: 100dvh;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* =====================================================================
+       Top app bar
+       ===================================================================== */
+    .top-app-bar {
+      flex: 0 0 var(--topbar-height);
+      height: var(--topbar-height);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 var(--content-pad);
+      background: var(--md-surface-container);
+      border-bottom: 1px solid var(--md-outline-variant);
+      position: relative;
+      z-index: 30;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      flex: none;
+      border-radius: 12px;
+      color: var(--md-on-primary-container);
+      background: var(--md-primary-container);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(145deg, rgba(255,255,255,0.18), transparent 58%);
+      pointer-events: none;
+    }
+
+    .brand-mark .icon {
+      width: 24px;
+      height: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-copy {
+      min-width: 0;
+    }
+
+    .brand-title {
+      font-family: var(--md-font-display);
+      font-size: 19px;
+      line-height: 24px;
+      font-weight: 620;
+      font-variation-settings: "opsz" 32, "wght" 620;
+      letter-spacing: -0.02em;
+      color: var(--md-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand-subtitle {
+      font-size: 9.5px;
+      line-height: 13px;
+      font-weight: 650;
+      letter-spacing: 0.16em;
+      color: var(--md-on-surface-variant);
+      white-space: nowrap;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: none;
+    }
+
+    /* =====================================================================
+       Assist chip, buttons, icon buttons
+       ===================================================================== */
+    .assist-chip {
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 13px;
+      border-radius: 999px;
+      border: 1px solid var(--md-outline-variant);
+      background: var(--md-surface);
+      color: var(--md-on-surface-variant);
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 550;
+      white-space: nowrap;
+      transition:
+        background-color var(--md-duration-short) var(--md-ease),
+        border-color var(--md-duration-short) var(--md-ease);
+    }
+
+    button.assist-chip {
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    button.assist-chip::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0;
+      transition: opacity var(--md-duration-short) var(--md-ease);
+    }
+
+    button.assist-chip:hover::after { opacity: 0.08; }
+    button.assist-chip:active::after { opacity: 0.12; }
+
+    .system-chip {
+      height: 32px;
+      background: var(--md-surface-container-high);
+      border-color: transparent;
+      color: var(--md-on-surface-variant);
+    }
+
+    .system-chip.is-warning {
+      background: var(--md-warning-container);
+      color: var(--md-on-warning-container);
+    }
+
+    .system-chip.is-busy {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      flex: none;
+      border-radius: 50%;
+      background: var(--md-ok);
+      position: relative;
+    }
+
+    .live-dot::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 1px solid color-mix(in srgb, var(--md-ok) 45%, transparent);
+      animation: ping 2.4s var(--md-ease) infinite;
+    }
+
+    .is-warning .live-dot { background: var(--md-warning); }
+    .is-warning .live-dot::after { border-color: color-mix(in srgb, var(--md-warning) 45%, transparent); }
+    .is-busy .live-dot { background: var(--md-primary); }
+    .is-busy .live-dot::after { border-color: color-mix(in srgb, var(--md-primary) 50%, transparent); }
+
+    .m3-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      height: 40px;
+      padding: 0 20px;
+      border: 1px solid transparent;
+      border-radius: var(--md-shape-btn);
+      font-size: 13px;
+      line-height: 18px;
+      font-weight: 620;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      isolation: isolate;
+      transition:
+        background-color var(--md-duration-short) var(--md-ease),
+        border-color var(--md-duration-short) var(--md-ease),
+        color var(--md-duration-short) var(--md-ease),
+        opacity var(--md-duration-short) var(--md-ease);
+    }
+
+    .m3-btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: currentColor;
+      opacity: 0;
+      transition: opacity var(--md-duration-short) var(--md-ease);
+    }
+
+    .m3-btn > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .m3-btn:hover::after { opacity: 0.08; }
+    .m3-btn:active::after { opacity: 0.12; }
+    .m3-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+    .m3-btn:disabled::after { opacity: 0; }
+
+    .m3-btn-filled {
+      background: var(--md-primary);
+      color: var(--md-on-primary);
+    }
+
+    .m3-btn-tonal {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    .m3-btn-text {
+      background: transparent;
+      color: var(--md-primary);
+      padding: 0 14px;
+    }
+
+    .m3-btn-outlined {
+      background: transparent;
+      color: var(--md-primary);
+      border-color: var(--md-outline);
+    }
+
+    .m3-btn-text.is-danger {
+      color: var(--md-error);
+    }
+
+    .m3-btn.compact {
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 16px;
+      font-size: 12px;
+    }
+
+    .icon-btn {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--md-on-surface-variant);
+      cursor: pointer;
+      overflow: hidden;
+      transition: color var(--md-duration-short) var(--md-ease);
+    }
+
+    .icon-btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: currentColor;
+      opacity: 0;
+      transition: opacity var(--md-duration-short) var(--md-ease);
+    }
+
+    .icon-btn:hover::after { opacity: 0.08; }
+    .icon-btn:active::after { opacity: 0.12; }
+    .icon-btn:hover { color: var(--md-on-surface); }
+    .icon-btn .icon { position: relative; z-index: 1; }
+
+    .m3-spinner {
+      display: none;
+      width: 16px;
+      height: 16px;
+      flex: none;
+      border-radius: 50%;
+      border: 2px solid color-mix(in srgb, currentColor 26%, transparent);
+      border-top-color: currentColor;
+      animation: spin 750ms linear infinite;
+    }
+
+    .btn-spinner {
+      display: none !important;
+    }
+
+    .is-loading .btn-spinner {
+      display: inline-block !important;
+    }
+
+    .is-loading .m3-spinner { display: inline-block; }
+    .is-loading .btn-icon { display: none; }
+
+    .loading.loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid color-mix(in srgb, currentColor 26%, transparent);
+      border-top-color: currentColor;
+      animation: spin 750ms linear infinite;
+    }
+
+    /* =====================================================================
+       Workspace / overview
+       ===================================================================== */
+    .workspace {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 18px var(--content-pad) 14px;
+    }
+
+    .overview {
+      flex: none;
+      display: grid;
+      grid-template-columns: minmax(250px, 1.1fr) minmax(0, 2.2fr);
+      gap: 18px;
+      align-items: stretch;
+      padding: 14px 18px;
+      border-radius: 24px;
+      border: 1px solid var(--md-outline-variant);
+      background: var(--md-surface-container-low);
+    }
+
+    .overview-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .overview-eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9.5px;
+      line-height: 12px;
+      letter-spacing: 0.18em;
+      font-weight: 700;
+      color: var(--md-primary);
+    }
+
+    .overview-eyebrow .live-dot {
+      width: 5px;
+      height: 5px;
+    }
+
+    .overview-title {
+      margin: 0;
+      font-family: var(--md-font-display);
+      font-size: 27px;
+      line-height: 34px;
+      font-weight: 660;
+      font-variation-settings: "opsz" 48, "wght" 660;
+      letter-spacing: -0.03em;
+      color: var(--md-on-surface);
+    }
+
+    .overview-sub {
+      margin: 0;
+      color: var(--md-on-surface-variant);
+      font-size: 12px;
+      line-height: 18px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .metric {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 11px 13px;
+      background: var(--md-surface-container);
+      border-radius: 16px;
+    }
+
+    .metric-icon {
+      width: 36px;
+      height: 36px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--md-surface-container-high);
+      color: var(--md-primary);
+    }
+
+    .metric:nth-child(2) .metric-icon {
+      color: var(--md-tertiary);
+      background: color-mix(in srgb, var(--md-tertiary-container) 66%, var(--md-surface-container-high));
+    }
+
+    .metric:nth-child(3) .metric-icon {
+      color: var(--md-secondary);
+    }
+
+    .metric:nth-child(4) .metric-icon {
+      color: var(--md-on-surface-variant);
+    }
+
+    .metric-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .metric-value {
+      font-family: var(--md-font-display);
+      font-size: 21px;
+      line-height: 25px;
+      font-weight: 640;
+      font-variation-settings: "opsz" 24, "wght" 640;
+      color: var(--md-on-surface);
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .metric-label {
+      font-size: 10.5px;
+      line-height: 14px;
+      font-weight: 500;
+      color: var(--md-on-surface-variant);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* =====================================================================
+       Tasks section
+       ===================================================================== */
+    .tasks-section {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-heading {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 32px;
+    }
+
+    .section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .section-title {
+      margin: 0;
+      font-family: var(--md-font-display);
+      font-size: 19px;
+      line-height: 24px;
+      font-weight: 620;
+      font-variation-settings: "opsz" 32, "wght" 620;
+      letter-spacing: -0.02em;
+    }
+
+    .count-badge {
+      min-width: 24px;
+      height: 22px;
+      padding: 0 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: var(--md-surface-container-high);
+      color: var(--md-on-surface-variant);
+      font-family: var(--md-font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .filter-chip {
+      height: 32px;
+      padding: 0 13px;
+      border-radius: 999px;
+      border: 1px solid var(--md-outline-variant);
+      background: transparent;
+      color: var(--md-on-surface-variant);
+      font-size: 11.5px;
+      font-weight: 550;
+      cursor: pointer;
+      transition:
+        background-color var(--md-duration-short) var(--md-ease),
+        color var(--md-duration-short) var(--md-ease),
+        border-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .filter-chip:hover {
+      background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+      color: var(--md-on-surface);
+    }
+
+    .filter-chip[aria-pressed="true"] {
+      background: var(--md-secondary-container);
+      border-color: transparent;
+      color: var(--md-on-secondary-container);
+    }
+
+    .task-grid {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-auto-rows: minmax(324px, max-content);
+      gap: 16px;
+      align-content: start;
+      padding: 1px 2px 10px;
+      scrollbar-gutter: stable;
+    }
+
+    /* =====================================================================
+       Task card
+       ===================================================================== */
+    .task-card {
+      position: relative;
+      min-width: 0;
+      min-height: 324px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+      border-radius: var(--md-shape-card);
+      border: 1px solid transparent;
+      background: var(--md-surface-container);
+      overflow: hidden;
+      transition:
+        background-color var(--md-duration-medium) var(--md-ease),
+        border-color var(--md-duration-medium) var(--md-ease),
+        opacity var(--md-duration-medium) var(--md-ease);
+    }
+
+    .task-card:hover {
+      background: var(--md-surface-container-high);
+    }
+
+    .task-card[data-phase="error"] {
+      background: var(--md-surface-container);
+      border-color: color-mix(in srgb, var(--md-error) 34%, transparent);
+    }
+
+    .task-card[data-phase="error"]:hover {
+      background: var(--md-surface-container-high);
+    }
+
+    .task-card[data-disabled="true"] {
+      opacity: 0.66;
+    }
+
+    .task-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      min-width: 0;
+    }
+
+    .type-emblem {
+      width: 42px;
+      height: 42px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+
+    .type-emblem .icon { width: 22px; height: 22px; }
+
+    .type-emblem.type-plugin {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    .type-emblem.type-mod {
+      background: var(--md-tertiary-container);
+      color: var(--md-on-tertiary-container);
+    }
+
+    .type-emblem.type-other {
+      background: var(--md-surface-container-highest);
+      color: var(--md-on-surface-variant);
+    }
+
+    .task-title-block {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding-top: 1px;
+    }
+
+    .task-title-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .task-name {
+      margin: 0;
+      font-size: 15px;
+      line-height: 20px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .type-chip {
+      flex: none;
+      height: 20px;
+      padding: 0 7px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      font-size: 9.5px;
+      line-height: 1;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+
+    .type-chip.type-plugin {
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    .type-chip.type-mod {
+      background: var(--md-tertiary-container);
+      color: var(--md-on-tertiary-container);
+    }
+
+    .type-chip.type-other {
+      background: var(--md-surface-container-highest);
+      color: var(--md-on-surface-variant);
+    }
+
+    .repo-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      font-family: var(--md-font-mono);
+      font-size: 10.5px;
+      line-height: 15px;
+      color: var(--md-on-surface-variant);
+      text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .repo-link:hover {
+      color: var(--md-primary);
+      text-decoration: none;
+    }
+
+    .repo-link .icon { width: 12px; height: 12px; flex: none; }
+
+    .status-chip {
+      flex: none;
+      height: 32px;
+      padding: 0 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid var(--md-outline-variant);
+      background: var(--md-surface);
+      color: var(--md-on-surface-variant);
+      font-size: 11px;
+      line-height: 1;
+      font-weight: 620;
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      flex: none;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.8;
+    }
+
+    .status-chip.tone-update {
+      border-color: transparent;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+
+    .status-chip.tone-ok {
+      border-color: transparent;
+      background: var(--md-ok-container);
+      color: var(--md-on-ok-container);
+    }
+
+    .status-chip.tone-error {
+      border-color: transparent;
+      background: var(--md-error-container);
+      color: var(--md-on-error-container);
+    }
+
+    .status-chip.tone-busy {
+      border-color: transparent;
+      background: var(--md-secondary-container);
+      color: var(--md-on-secondary-container);
+    }
+
+    .status-chip.tone-disabled {
+      opacity: 0.66;
+    }
+
+    .task-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      color: var(--md-on-surface-variant);
+      font-size: 10.5px;
+      line-height: 15px;
+    }
+
+    .task-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-meta span:last-child {
+      font-family: var(--md-font-mono);
+      font-size: 10px;
+      color: var(--md-outline);
+    }
+
+    .task-meta .icon { width: 13px; height: 13px; }
+
+    .version-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr);
+      align-items: center;
+      gap: 7px;
+      padding: 9px 11px;
+      background: var(--md-surface-container-low);
+      border-radius: 11px;
+      border: 1px solid color-mix(in srgb, var(--md-outline-variant) 54%, transparent);
+    }
+
+    .version-cell {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .version-label {
+      font-size: 9px;
+      line-height: 12px;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      color: var(--md-outline);
+      text-transform: uppercase;
+    }
+
+    .version-value {
+      font-family: var(--md-font-mono);
+      font-size: 12px;
+      line-height: 17px;
+      font-weight: 600;
+      color: var(--md-on-surface);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .version-value.is-latest { color: var(--md-primary); }
+    .version-value.is-empty { color: var(--md-outline); font-weight: 500; }
+    .version-arrow {
+      display: grid;
+      place-items: center;
+      color: var(--md-outline);
+    }
+    .version-arrow .icon { width: 15px; height: 15px; }
+
+    .asset-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--md-on-surface-variant);
+      font-size: 10.5px;
+      line-height: 15px;
+    }
+
+    .asset-row .icon {
+      width: 13px;
+      height: 13px;
+      color: var(--md-outline);
+    }
+
+    .asset-row code {
+      font-family: var(--md-font-mono);
+      font-size: 10px;
+      color: var(--md-on-surface-variant);
+      background: transparent;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      padding: 2px 1px;
+    }
+
+    .pipeline-step {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 5px;
+      min-width: 0;
+      color: var(--md-outline);
+    }
+
+    .pipeline-step::before {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 9px;
+      right: -3px;
+      height: 1px;
+      background: var(--md-outline-variant);
+    }
+
+    .pipeline-step:last-child::before { display: none; }
+
+    .step-dot {
+      width: 9px;
+      height: 9px;
+      flex: none;
+      border-radius: 50%;
+      border: 1px solid var(--md-outline);
+      background: var(--md-surface-container);
+      z-index: 1;
+      transition: all var(--md-duration-medium) var(--md-ease);
+    }
+
+    .step-label {
+      font-size: 8.5px;
+      line-height: 11px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    .pipeline-step.is-done { color: var(--md-on-surface-variant); }
+    .pipeline-step.is-done .step-dot {
+      border-color: var(--md-primary);
+      background: var(--md-primary);
+    }
+    .pipeline-step.is-done::before { background: var(--md-primary); }
+
+    .pipeline-step.is-active { color: var(--md-primary); font-weight: 600; }
+    .pipeline-step.is-active .step-dot {
+      background: var(--md-primary);
+      border-color: var(--md-primary);
+      outline: 3px solid color-mix(in srgb, var(--md-primary) 20%, transparent);
+      animation: soft-pulse 1.6s var(--md-ease) infinite;
+    }
+
+    .pipeline-step.is-error { color: var(--md-error); }
+    .pipeline-step.is-error .step-dot {
+      background: var(--md-error);
+      border-color: var(--md-error);
+    }
+
+    .release-notes {
+      display: none;
+      min-height: 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--md-surface-container-low) 72%, transparent);
+      color: var(--md-on-surface-variant);
+      font-size: 10.5px;
+      line-height: 15px;
+      overflow: hidden;
+    }
+
+    .release-notes-label {
+      display: block;
+      font-size: 8.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--md-outline);
+      margin-bottom: 3px;
+      font-weight: 600;
+    }
+
+    .release-notes p {
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: pre-line;
+    }
+
+    .card-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--md-on-surface-variant);
+      font-family: var(--md-font-mono);
+      font-size: 9.5px;
+    }
+
+    .linear-progress {
+      height: 4px;
+      background: var(--md-surface-container-low);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .linear-progress > span {
+      display: block;
+      height: 100%;
+      background: var(--md-primary);
+      border-radius: inherit;
+      transition: width 180ms var(--md-ease);
+    }
+
+    .linear-progress.is-indeterminate > span {
+      width: 38% !important;
+      animation: indeterminate 1.15s var(--md-ease) infinite;
+    }
+
+    .card-error {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      color: var(--md-error);
+      font-size: 10.5px;
+      line-height: 15px;
+      padding: 7px 9px;
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--md-error-container) 42%, transparent);
+    }
+
+    .card-error .icon { width: 13px; height: 13px; margin-top: 1px; }
+    .card-error span {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-footer {
+      margin-top: auto;
+      padding-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .card-footnote {
+      min-width: 0;
+      color: var(--md-outline);
+      font-size: 9.5px;
+      line-height: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex: none;
+    }
+
+    .card-actions .m3-btn {
+      height: 40px;
+      padding: 0 16px;
+      font-size: 11.5px;
+      border-radius: var(--md-shape-btn);
+    }
+
+    .card-actions .m3-btn-text {
+      padding: 0 9px;
+    }
+
+    .card-actions .icon-btn {
+      width: 34px;
+      height: 34px;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 8px;
+      padding: 30px;
+      border-radius: 20px;
+      border: 1px dashed var(--md-outline-variant);
+      background: color-mix(in srgb, var(--md-surface-container) 52%, transparent);
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: var(--md-surface-container-high);
+      color: var(--md-primary);
+      margin-bottom: 4px;
+    }
+
+    .empty-icon .icon { width: 30px; height: 30px; }
+    .empty-title { margin: 0; font-size: 17px; font-weight: 620; }
+    .empty-copy { margin: 0; max-width: 420px; color: var(--md-on-surface-variant); font-size: 12px; line-height: 19px; }
+
+    .skeleton-card {
+      min-height: 324px;
+      border-radius: var(--md-shape-card);
+      background: var(--md-surface-container);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .skeleton-line {
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--md-surface-container-high) 25%, var(--md-surface-container-highest) 50%, var(--md-surface-container-high) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.8s linear infinite;
+    }
+
+    /* More than three cards means two rows; keep the whole task list visible
+       at 1080p by giving the log dock less vertical space in dense mode. */
+    .app-shell.is-dense {
+      --log-height: 220px;
+    }
+
+    .app-shell.is-dense .task-grid {
+      grid-auto-rows: minmax(258px, max-content);
+    }
+
+    .app-shell.is-dense .task-card {
+      min-height: 258px;
+      padding: 14px;
+      gap: 8px;
+    }
+
+    /* =====================================================================
+       Log dock
+       ===================================================================== */
+    .log-dock {
+      flex: 0 0 var(--log-height);
+      height: var(--log-height);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--md-surface-container-lowest);
+      border-top: 1px solid var(--md-outline-variant);
+      transition: height var(--md-duration-medium) var(--md-ease), flex-basis var(--md-duration-medium) var(--md-ease);
+      position: relative;
+      z-index: 20;
+    }
+
+    .log-dock.is-collapsed {
+      flex-basis: var(--log-collapsed-height);
+      height: var(--log-collapsed-height);
+    }
+
+    .log-header {
+      flex: 0 0 46px;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 var(--content-pad);
+      border-bottom: 1px solid color-mix(in srgb, var(--md-outline-variant) 72%, transparent);
+      background: var(--md-surface-container-lowest);
+    }
+
+    .log-title {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .log-title .icon { width: 17px; height: 17px; color: var(--md-primary); }
+
+    .log-title-text {
+      font-size: 12px;
+      font-weight: 620;
+      letter-spacing: 0.01em;
+      color: var(--md-on-surface);
+      white-space: nowrap;
+    }
+
+    .log-live {
+      height: 19px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border-radius: 999px;
+      background: var(--md-ok-container);
+      color: var(--md-on-ok-container);
+      font-family: var(--md-font-mono);
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .log-live::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .log-live.is-offline {
+      background: var(--md-surface-container-high);
+      color: var(--md-on-surface-variant);
+    }
+
+    .log-count {
+      font-family: var(--md-font-mono);
+      font-size: 9.5px;
+      color: var(--md-outline);
+      white-space: nowrap;
+    }
+
+    .log-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex: none;
+    }
+
+    .log-actions .icon-btn { width: 34px; height: 34px; }
+    .log-actions .m3-btn { color: var(--md-on-surface-variant); }
+
+    .log-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 8px var(--content-pad) 14px;
+      font-family: var(--md-font-mono);
+      font-size: 11px;
+      line-height: 1.7;
+      background: var(--md-surface-container-lowest);
+      scrollbar-gutter: stable;
+    }
+
+    .log-dock.is-collapsed .log-body { display: none; }
+
+    .log-line {
+      display: grid;
+      grid-template-columns: 66px 48px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .log-line:hover { background: color-mix(in srgb, var(--md-surface-container) 64%, transparent); }
+
+    .log-time { color: var(--md-outline); font-size: 10px; line-height: 19px; white-space: nowrap; }
+    .log-level { font-size: 9px; line-height: 19px; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; }
+    .log-message { min-width: 0; color: var(--md-on-surface-variant); overflow-wrap: anywhere; white-space: pre-wrap; }
+
+    .log-line.level-ERROR .log-level, .log-line.level-ERROR .log-message { color: var(--md-error); }
+    .log-line.level-WARN .log-level { color: var(--md-warning); }
+    .log-line.level-WARN .log-message { color: var(--md-tertiary); }
+    .log-line.level-INFO .log-level { color: var(--md-primary); }
+    .log-line.level-DEBUG .log-level, .log-line.level-TRACE .log-level { color: var(--md-outline); }
+    .log-line.level-DEBUG .log-message, .log-line.level-TRACE .log-message { color: var(--md-outline); }
+
+    .log-empty {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--md-outline);
+      font-size: 11px;
+      padding: 8px 4px;
+    }
+
+    /* =====================================================================
+       FAB + snackbar
+       ===================================================================== */
+    .fab {
+      position: fixed;
+      right: var(--content-pad);
+      bottom: calc(var(--log-dock-height) + 20px);
+      width: 56px;
+      height: 56px;
+      border: 0;
+      border-radius: var(--md-shape-fab);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+      z-index: 40;
+      overflow: hidden;
+      transition:
+        bottom var(--md-duration-medium) var(--md-ease),
+        background-color var(--md-duration-short) var(--md-ease),
+        transform var(--md-duration-short) var(--md-ease);
+    }
+
+    .fab::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0;
+      transition: opacity var(--md-duration-short) var(--md-ease);
+    }
+
+    .fab:hover::after { opacity: 0.08; }
+    .fab:active::after { opacity: 0.12; }
+    .fab:active { transform: scale(0.97); }
+    .fab .icon { width: 25px; height: 25px; position: relative; z-index: 1; }
+
+    .snackbar {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--log-dock-height) + 22px);
+      transform: translate(-50%, 14px);
+      max-width: min(620px, calc(100vw - 36px));
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 6px 6px 16px;
+      border-radius: var(--md-shape-btn);
+      background: var(--md-inverse-surface);
+      color: var(--md-inverse-on-surface);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 80;
+      transition:
+        opacity var(--md-duration-medium) var(--md-ease),
+        transform var(--md-duration-medium) var(--md-ease),
+        bottom var(--md-duration-medium) var(--md-ease);
+    }
+
+    .snackbar.is-visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+      pointer-events: auto;
+    }
+
+    .snackbar-text {
+      min-width: 0;
+      font-size: 12px;
+      line-height: 17px;
+      font-weight: 500;
+      overflow-wrap: anywhere;
+    }
+
+    .snackbar-action {
+      flex: none;
+      height: 38px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 19px;
+      background: transparent;
+      color: var(--md-inverse-primary);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .snackbar-action:hover { background: color-mix(in srgb, var(--md-inverse-primary) 8%, transparent); }
+
+    .snackbar-close {
+      width: 34px;
+      height: 34px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--md-inverse-on-surface);
+      cursor: pointer;
+      opacity: 0.7;
+    }
+
+    .snackbar-close:hover { opacity: 1; background: color-mix(in srgb, var(--md-inverse-on-surface) 8%, transparent); }
+    .snackbar-close .icon { width: 16px; height: 16px; }
+
+    /* =====================================================================
+       Dialogs and forms
+       ===================================================================== */
+    dialog.m3-dialog {
+      width: min(700px, calc(100vw - 40px));
+      max-height: min(880px, calc(100dvh - 48px));
+      padding: 0;
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-dialog);
+      background: var(--md-surface-container-high);
+      color: var(--md-on-surface);
+      overflow: hidden;
+      margin: auto;
+    }
+
+    dialog.m3-dialog[open] {
+      display: flex;
+      flex-direction: column;
+      animation: dialog-in 240ms var(--md-ease) both;
+    }
+
+    dialog.m3-dialog.dialog-small {
+      width: min(440px, calc(100vw - 40px));
+    }
+
+    dialog.m3-dialog::backdrop {
+      background: var(--md-scrim);
+      animation: fade-in 180ms var(--md-ease) both;
+    }
+
+    .dialog-header {
+      flex: none;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 24px 24px 0;
+    }
+
+    .dialog-eyebrow {
+      margin: 0 0 4px;
+      color: var(--md-primary);
+      font-size: 9.5px;
+      line-height: 13px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .dialog-title {
+      margin: 0;
+      font-family: var(--md-font-display);
+      font-size: 25px;
+      line-height: 31px;
+      font-weight: 640;
+      font-variation-settings: "opsz" 32, "wght" 640;
+      letter-spacing: -0.025em;
+    }
+
+    .dialog-subtitle {
+      margin: 6px 0 0;
+      color: var(--md-on-surface-variant);
+      font-size: 12px;
+      line-height: 18px;
+    }
+
+    .dialog-form {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .dialog-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 20px 24px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .dialog-footer {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 24px 24px;
+      border-top: 1px solid transparent;
+    }
+
+    .footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .span-2 { grid-column: 1 / -1; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .field-label {
+      padding-left: 12px;
+      font-size: 11px;
+      line-height: 15px;
+      font-weight: 600;
+      color: var(--md-on-surface-variant);
+    }
+
+    .field-input,
+    .field-select {
+      width: 100%;
+      height: 50px;
+      padding: 0 14px;
+      border: 1px solid var(--md-outline);
+      border-radius: 12px;
+      background: transparent;
+      color: var(--md-on-surface);
+      font-size: 13px;
+      outline: none;
+      transition:
+        border-color var(--md-duration-short) var(--md-ease),
+        background-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .field-select {
+      appearance: none;
+      padding-right: 38px;
+      background-image: linear-gradient(45deg, transparent 50%, var(--md-on-surface-variant) 50%), linear-gradient(135deg, var(--md-on-surface-variant) 50%, transparent 50%);
+      background-position: calc(100% - 17px) 22px, calc(100% - 12px) 22px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+
+    .field-input::placeholder { color: color-mix(in srgb, var(--md-on-surface-variant) 58%, transparent); }
+
+    .field-input:hover,
+    .field-select:hover {
+      border-color: var(--md-on-surface-variant);
+      background-color: color-mix(in srgb, var(--md-on-surface) 2%, transparent);
+    }
+
+    .field-input:focus,
+    .field-select:focus {
+      border-color: var(--md-primary);
+      outline: 1px solid var(--md-primary);
+      outline-offset: 1px;
+      background-color: color-mix(in srgb, var(--md-primary) 3%, transparent);
+    }
+
+    .field-hint {
+      padding-left: 12px;
+      color: var(--md-outline);
+      font-size: 10px;
+      line-height: 14px;
+    }
+
+    .field-error {
+      display: none;
+      padding-left: 12px;
+      color: var(--md-error);
+      font-size: 10px;
+      line-height: 14px;
+    }
+
+    .field.has-error .field-input,
+    .field.has-error .field-select { border-color: var(--md-error); }
+    .field.has-error .field-error { display: block; }
+
+    .form-error {
+      display: none;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--md-error-container);
+      color: var(--md-on-error-container);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .form-error.is-visible { display: flex; }
+    .form-error .icon { width: 16px; height: 16px; margin-top: 1px; flex: none; }
+
+    .segmented {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 36px;
+    }
+
+    .segmented input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .segmented label {
+      height: 36px;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--md-outline-variant);
+      border-radius: 999px;
+      color: var(--md-on-surface-variant);
+      font-size: 11.5px;
+      font-weight: 550;
+      cursor: pointer;
+      transition:
+        background-color var(--md-duration-short) var(--md-ease),
+        color var(--md-duration-short) var(--md-ease),
+        border-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .segmented label:hover {
+      background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+      color: var(--md-on-surface);
+    }
+
+    .segmented input:checked + label {
+      background: var(--md-secondary-container);
+      border-color: transparent;
+      color: var(--md-on-secondary-container);
+    }
+
+    .segmented input:focus-visible + label {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 2px;
+    }
+
+    .segmented .icon { width: 14px; height: 14px; }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 60px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--md-surface-container);
+    }
+
+    .switch-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .switch-title {
+      color: var(--md-on-surface);
+      font-size: 12px;
+      line-height: 17px;
+      font-weight: 550;
+    }
+
+    .switch-hint {
+      color: var(--md-outline);
+      font-size: 10px;
+      line-height: 14px;
+    }
+
+    .switch {
+      position: relative;
+      width: 52px;
+      height: 32px;
+      flex: none;
+      display: inline-block;
+    }
+
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+    }
+
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      border: 2px solid var(--md-outline);
+      background: var(--md-surface-container-highest);
+      cursor: pointer;
+      transition:
+        background-color var(--md-duration-short) var(--md-ease),
+        border-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--md-outline);
+      transition:
+        transform var(--md-duration-medium) var(--md-ease),
+        width var(--md-duration-medium) var(--md-ease),
+        height var(--md-duration-medium) var(--md-ease),
+        top var(--md-duration-medium) var(--md-ease),
+        left var(--md-duration-medium) var(--md-ease),
+        background-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .switch input:checked + .switch-track {
+      background: var(--md-primary);
+      border-color: var(--md-primary);
+    }
+
+    .switch input:checked + .switch-track::after {
+      width: 24px;
+      height: 24px;
+      top: 2px;
+      left: 2px;
+      transform: translateX(20px);
+      background: var(--md-on-primary);
+    }
+
+    .switch input:focus-visible + .switch-track {
+      outline: 2px solid var(--md-primary);
+      outline-offset: 3px;
+    }
+
+    .dialog-section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 2px 0 -2px;
+      color: var(--md-on-surface-variant);
+      font-size: 10px;
+      line-height: 14px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .dialog-section-title::after {
+      content: "";
+      height: 1px;
+      flex: 1;
+      background: var(--md-outline-variant);
+    }
+
+    .dialog-note {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--md-primary-container) 36%, transparent);
+      color: var(--md-on-surface-variant);
+      font-size: 10.5px;
+      line-height: 16px;
+    }
+
+    .dialog-note .icon { width: 15px; height: 15px; color: var(--md-primary); flex: none; margin-top: 1px; }
+
+    #confirmAccept {
+      background: var(--md-error);
+      color: var(--md-on-error);
+    }
+
+    .confirm-copy {
+      color: var(--md-on-surface-variant);
+      font-size: 12.5px;
+      line-height: 20px;
+      margin: 0;
+    }
+
+    .restart-chip {
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+      font-size: 10.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .restart-chip:hover {
+      background: color-mix(in srgb, var(--md-primary-container) 82%, var(--md-primary));
+    }
+
+    .restart-chip .icon { width: 14px; height: 14px; }
+
+    .scheduled-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .scheduled-empty {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px dashed var(--md-outline-variant);
+      color: var(--md-outline);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    .scheduled-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--md-surface-container);
+      border: 1px solid color-mix(in srgb, var(--md-outline-variant) 55%, transparent);
+    }
+
+    .scheduled-item.is-failed {
+      border-color: color-mix(in srgb, var(--md-error) 45%, transparent);
+      background: color-mix(in srgb, var(--md-error-container) 28%, var(--md-surface-container));
+    }
+
+    .scheduled-item .scheduled-icon {
+      width: 30px;
+      height: 30px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+
+    .scheduled-item .scheduled-icon .icon { width: 16px; height: 16px; }
+
+    .scheduled-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .scheduled-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .scheduled-meta {
+      font-family: var(--md-font-mono);
+      font-size: 9.5px;
+      color: var(--md-on-surface-variant);
+    }
+
+    .batch-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .batch-check-all {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--md-on-surface-variant);
+      font-size: 11.5px;
+      cursor: pointer;
+    }
+
+    .batch-check-all input,
+    .batch-task input[type="checkbox"] {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--md-primary);
+      cursor: pointer;
+    }
+
+    .batch-count {
+      color: var(--md-outline);
+      font-family: var(--md-font-mono);
+      font-size: 10px;
+    }
+
+    .batch-task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .batch-task {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: var(--md-surface-container);
+      border: 1px solid color-mix(in srgb, var(--md-outline-variant) 45%, transparent);
+      cursor: pointer;
+      transition: background-color var(--md-duration-short) var(--md-ease);
+    }
+
+    .batch-task:hover {
+      background: var(--md-surface-container-high);
+    }
+
+    .batch-task input { flex: none; }
+
+    .batch-task-main {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .batch-task-name {
+      font-size: 11.5px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .batch-task-meta {
+      font-family: var(--md-font-mono);
+      font-size: 9px;
+      color: var(--md-outline);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .batch-task-provider {
+      flex: none;
+      font-size: 9px;
+      color: var(--md-on-surface-variant);
+      background: var(--md-surface-container-low);
+      border-radius: 999px;
+      padding: 4px 7px;
+    }
+
+    .batch-empty {
+      padding: 16px;
+      color: var(--md-outline);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    /* =====================================================================
+       Motion / responsive
+       ===================================================================== */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes ping {
+      0% { transform: scale(0.65); opacity: 0.7; }
+      78%, 100% { transform: scale(1.65); opacity: 0; }
+    }
+    @keyframes soft-pulse {
+      0%, 100% { outline-color: color-mix(in srgb, var(--md-primary) 16%, transparent); }
+      50% { outline-color: color-mix(in srgb, var(--md-primary) 36%, transparent); }
+    }
+    @keyframes card-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes dialog-in {
+      from { opacity: 0; transform: translateY(10px) scale(0.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    @keyframes indeterminate {
+      from { transform: translateX(-110%); }
+      to { transform: translateX(300%); }
+    }
+
+    @media (max-width: 1320px) {
+      .task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .overview { grid-template-columns: minmax(220px, 0.9fr) minmax(0, 2fr); }
+    }
+
+    @media (max-width: 980px) {
+      :root { --content-pad: 18px; --log-height: 246px; }
+      .overview { grid-template-columns: 1fr; gap: 12px; }
+      .overview-title { font-size: 24px; line-height: 30px; }
+      .brand-subtitle { display: none; }
+      .top-actions { gap: 4px; }
+      .system-chip { display: none; }
+    }
+
+    @media (max-width: 760px) {
+      :root { --content-pad: 14px; }
+      body { overflow: auto; }
+      .app-shell { height: auto; min-height: 100dvh; overflow: visible; }
+      .top-app-bar { position: sticky; top: 0; }
+      .brand-title { font-size: 16px; }
+      .top-check .m3-btn-label, .top-batch .m3-btn-label { display: none; }
+      .top-check, .top-batch { width: 40px; padding: 0; }
+      .workspace { flex: none; min-height: 0; padding-top: 12px; }
+      .overview { border-radius: 20px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .task-grid { grid-template-columns: 1fr; overflow: visible; }
+      .section-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+      .filters { justify-content: flex-start; }
+      .log-dock { height: 280px; flex-basis: 280px; }
+      .log-dock.is-collapsed { height: 54px; flex-basis: 54px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .span-2 { grid-column: auto; }
+      .fab { bottom: 22px; }
+      .snackbar { bottom: 86px; }
+      dialog.m3-dialog { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
+      .dialog-header { padding: 20px 20px 0; }
+      .dialog-body { padding: 16px 20px 8px; }
+      .dialog-footer { padding: 12px 20px 20px; }
+    }
+
+    @media (max-height: 850px) and (min-width: 761px) {
+      :root { --log-height: 236px; }
+      .workspace { gap: 12px; padding-top: 12px; }
+      .overview { padding: 10px 16px; }
+      .overview-title { font-size: 24px; line-height: 29px; }
+      .metric { padding: 8px 11px; }
+      .metric-icon { width: 32px; height: 32px; }
+      .metric-value { font-size: 19px; line-height: 22px; }
+      .task-grid { grid-auto-rows: minmax(292px, auto); }
+      .task-card { min-height: 292px; padding: 14px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg class="icon-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3 6.9 3.83L12 12.02 5.1 8.13 12 4.3Zm-7 5.83 6 3.33v6.7l-6-3.34v-6.69Zm14 0v6.69l-6 3.34v-6.7l6-3.33Z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35Z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.1 7.1 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.55-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.74 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.05.31-.07.63-.07.94s.02.63.07.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.14.24.43.34.68.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54a7.1 7.1 0 0 0 1.62-.94l2.39.96c.25.12.54.02.68-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m7.41 8.59 4.59 4.58 4.59-4.58L18 10l-6 6-6-6 1.41-1.41Z"/></symbol>
+    <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m7.41 15.41 4.59-4.58 4.59 4.58L18 14l-6-6-6 6 1.41 1.41Z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 14H4V8h16v10ZM6 10l2 2-2 2 1.4 1.4L11 12 7.4 8.6 6 10Zm6 4h4v2h-4v-2Z"/></symbol>
+    <symbol id="i-server" viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm1 3v2h2V6H5Zm0 12h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Zm0 2v1h2v-1H5Zm-1-9h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Zm1 2v2h2v-2H5Z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2Z"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7ZM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7Z"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25ZM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.41 4.3 19.71 2.89 18.3 9.17 12 2.89 5.71 4.3 4.29l6.29 6.3 6.3-6.3 1.41 1.42Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m9 16.17-4.17-4.18L3.41 13.4 9 19l12-12-1.41-1.41L9 16.17Z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 2 1 21h22L12 2Zm1 15h-2v2h2v-2Zm0-6h-2v4h2v-4Z"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><path d="M11 7h2v2h-2V7Zm0 4h2v6h-2v-6Zm1-9a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7ZM5 18v2h14v-2H5Z"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6ZM5 18v2h14v-2H5Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7Z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21Z"/></symbol>
+    <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.8 18 5.1 18 5.1c.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3Z"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8Z"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="m21 8-9-5-9 5v8l9 5 9-5V8Zm-9-2.7L18 8l-6 3.3L6 8l6-2.7ZM5 9.6l6 3.3v5.8l-6-3.3V9.6Zm8 9.1v-5.8l6-3.3v5.8l-6 3.3Z"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24"><path d="M16 7V3h-2v4h-4V3H8v4a4 4 0 0 0-4 4v3h7v7h2v-7h7v-3a4 4 0 0 0-4-4Z"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7l10-5Zm0 7.6L5.5 6.5 12 3.4l6.5 3.1L12 9.6Zm10 2.4-10 5-10-5 2.2-1.1L12 11.5l7.8-3.9L22 12Zm0 5-10 5-10-5 2.2-1.1L12 19.5l7.8-3.9L22 17Z"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 14H4V8h16v10ZM7 10h4v2H7v-2Zm0 4h7v2H7v-2Z"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 2c3.5 2.5 5 6.1 5 10l2.8 2.8a1 1 0 0 1 .2 1.1l-1.6 3.3a.7.7 0 0 1-1.1.2L14 16.2c-.7.2-1.3.3-2 .3s-1.3-.1-2-.3l-3.3 3.2a.7.7 0 0 1-1.1-.2L4 15.9a1 1 0 0 1 .2-1.1L7 12c0-3.9 1.5-7.5 5-10Zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/></symbol>
+  </svg>
+
+  <div class="app-shell" id="appShell">
+    <header class="top-app-bar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><svg class="icon"><use href="#i-logo"></use></svg></div>
+        <div class="brand-copy">
+          <div class="brand-title">MCSM-Auto-Deployer</div>
+          <div class="brand-subtitle">MINECRAFT RELEASE PIPELINE</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="assist-chip system-chip" id="systemChip" title="查看设置">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="systemChipLabel">正在连接</span>
+        </button>
+        <button type="button" class="m3-btn m3-btn-tonal top-batch" id="batchButton">
+          <span class="btn-icon" aria-hidden="true"><svg class="icon icon-sm"><use href="#i-layers"></use></svg></span>
+          <span class="m3-btn-label">批量部署</span>
+          <span class="loading loading-spinner btn-spinner" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="m3-btn m3-btn-filled top-check" id="checkAllButton">
+          <span class="btn-icon" aria-hidden="true"><svg class="icon icon-sm"><use href="#i-refresh"></use></svg></span>
+          <span class="m3-btn-label">立即检查</span>
+          <span class="loading loading-spinner btn-spinner" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="icon-btn" id="settingsButton" aria-label="打开设置" title="设置">
+          <svg class="icon"><use href="#i-settings"></use></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="overview" aria-label="系统概览">
+        <div class="overview-copy">
+          <div class="overview-eyebrow"><span class="live-dot" aria-hidden="true"></span>DEPLOYMENT CONTROL</div>
+          <h1 class="overview-title">部署总览</h1>
+          <p class="overview-sub" id="overviewSub">正在与调度引擎建立连接…</p>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-icon" aria-hidden="true"><svg class="icon"><use href="#i-download"></use></svg></div>
+            <div class="metric-copy">
+              <span class="metric-value" id="metricUpdates">—</span>
+              <span class="metric-label">可更新通道</span>
+            </div>
+          </div>
+          <div class="metric">
+            <div class="metric-icon" aria-hidden="true"><svg class="icon"><use href="#i-bolt"></use></svg></div>
+            <div class="metric-copy">
+              <span class="metric-value" id="metricBusy">—</span>
+              <span class="metric-label">正在执行</span>
+            </div>
+          </div>
+          <div class="metric">
+            <div class="metric-icon" aria-hidden="true"><svg class="icon"><use href="#i-github"></use></svg></div>
+            <div class="metric-copy">
+              <span class="metric-value mono" id="metricQuota">—</span>
+              <span class="metric-label" id="metricQuotaLabel">GitHub 剩余额度</span>
+            </div>
+          </div>
+          <div class="metric">
+            <div class="metric-icon" aria-hidden="true"><svg class="icon"><use href="#i-clock"></use></svg></div>
+            <div class="metric-copy">
+              <span class="metric-value mono" id="metricNext">—</span>
+              <span class="metric-label">下次自动检查</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tasks-section" aria-label="自动部署任务">
+        <div class="section-heading">
+          <div class="section-title-wrap">
+            <h2 class="section-title">更新通道</h2>
+            <span class="count-badge" id="taskCountBadge">0</span>
+            <button type="button" class="restart-chip" id="restartBadge" style="display:none" title="查看统一重启计划">
+              <svg class="icon icon-sm" aria-hidden="true"><use href="#i-clock"></use></svg>
+              <span id="restartBadgeText">0 个待重启</span>
+            </button>
+          </div>
+          <div class="filters" role="group" aria-label="筛选任务">
+            <button type="button" class="filter-chip" data-filter="all" aria-pressed="true">全部</button>
+            <button type="button" class="filter-chip" data-filter="updates" aria-pressed="false">有更新</button>
+            <button type="button" class="filter-chip" data-filter="busy" aria-pressed="false">执行中</button>
+            <button type="button" class="filter-chip" data-filter="error" aria-pressed="false">异常</button>
+          </div>
+        </div>
+        <div class="task-grid" id="taskGrid" aria-live="polite" aria-busy="true">
+          <div class="skeleton-card"><div class="skeleton-line" style="width:46%;height:16px"></div><div class="skeleton-line" style="width:70%"></div><div class="skeleton-line" style="width:100%;height:52px;margin-top:8px"></div><div class="skeleton-line" style="width:84%"></div><div class="skeleton-line" style="width:58%;margin-top:auto"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line" style="width:52%;height:16px"></div><div class="skeleton-line" style="width:62%"></div><div class="skeleton-line" style="width:100%;height:52px;margin-top:8px"></div><div class="skeleton-line" style="width:76%"></div><div class="skeleton-line" style="width:48%;margin-top:auto"></div></div>
+          <div class="skeleton-card"><div class="skeleton-line" style="width:42%;height:16px"></div><div class="skeleton-line" style="width:68%"></div><div class="skeleton-line" style="width:100%;height:52px;margin-top:8px"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:54%;margin-top:auto"></div></div>
+        </div>
+      </section>
+    </main>
+
+    <section class="log-dock" id="logDock" aria-label="实时日志">
+      <div class="log-header">
+        <div class="log-title">
+          <svg class="icon" aria-hidden="true"><use href="#i-terminal"></use></svg>
+          <span class="log-title-text">实时日志</span>
+          <span class="log-live" id="logLive">LIVE</span>
+          <span class="log-count" id="logCount">0 行</span>
+        </div>
+        <div class="log-actions">
+          <button type="button" class="m3-btn m3-btn-text compact" id="clearLogsButton">清空</button>
+          <button type="button" class="icon-btn" id="toggleLogsButton" aria-label="折叠日志面板" title="折叠 / 展开">
+            <svg class="icon" id="logToggleIcon"><use href="#i-chevron-down"></use></svg>
+          </button>
+        </div>
+      </div>
+      <div class="log-body" id="logBody" tabindex="0" aria-label="SSE 日志输出">
+        <div class="log-empty" id="logEmpty"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-terminal"></use></svg>等待后台日志事件…</div>
+      </div>
+    </section>
+  </div>
+
+  <button type="button" class="fab" id="addTaskButton" aria-label="新增任务" title="新增任务">
+    <svg class="icon" aria-hidden="true"><use href="#i-plus"></use></svg>
+  </button>
+
+  <div class="snackbar" id="snackbar" role="status" aria-live="polite" aria-atomic="true">
+    <span class="snackbar-text" id="snackbarText"></span>
+    <button type="button" class="snackbar-action" id="snackbarAction">查看日志</button>
+    <button type="button" class="snackbar-close" id="snackbarClose" aria-label="关闭提示">
+      <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg>
+    </button>
+  </div>
+
+  <dialog class="m3-dialog" id="taskDialog" aria-labelledby="taskDialogTitle">
+    <form class="dialog-form" id="taskForm" novalidate>
+      <div class="dialog-header">
+        <div>
+          <p class="dialog-eyebrow">UPDATE CHANNEL</p>
+          <h2 class="dialog-title" id="taskDialogTitle">新增更新任务</h2>
+          <p class="dialog-subtitle">从 GitHub、Modrinth、CurseForge 或 Spigot 同步资产至 MCSManager 实例。</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-dialog="taskDialog" aria-label="关闭对话框">
+          <svg class="icon"><use href="#i-close"></use></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-error" id="taskFormError" role="alert">
+          <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+          <span id="taskFormErrorText"></span>
+        </div>
+
+        <div class="form-grid">
+          <div class="field span-2" id="field-task-name">
+            <label class="field-label" for="taskName">任务名称</label>
+            <input class="field-input" id="taskName" name="name" autocomplete="off" placeholder="例如：Lophine 服务端核心">
+            <span class="field-error">请填写任务名称</span>
+          </div>
+
+          <div class="field span-2">
+            <span class="field-label">任务类型</span>
+            <div class="segmented" role="radiogroup" aria-label="任务类型">
+              <input type="radio" id="cat-auto" name="taskCategory" value="auto" checked>
+              <label for="cat-auto"><svg class="icon" aria-hidden="true"><use href="#i-bolt"></use></svg>自动识别</label>
+              <input type="radio" id="cat-core" name="taskCategory" value="core">
+              <label for="cat-core"><svg class="icon" aria-hidden="true"><use href="#i-server"></use></svg>核心</label>
+              <input type="radio" id="cat-plugin" name="taskCategory" value="plugin">
+              <label for="cat-plugin"><svg class="icon" aria-hidden="true"><use href="#i-plug"></use></svg>插件</label>
+              <input type="radio" id="cat-mod" name="taskCategory" value="mod">
+              <label for="cat-mod"><svg class="icon" aria-hidden="true"><use href="#i-layers"></use></svg>模组</label>
+              <input type="radio" id="cat-other" name="taskCategory" value="other">
+              <label for="cat-other"><svg class="icon" aria-hidden="true"><use href="#i-box"></use></svg>其他</label>
+            </div>
+          </div>
+
+          <div class="field" id="field-task-source-type">
+            <label class="field-label" for="taskSourceType">来源平台</label>
+            <select class="field-select" id="taskSourceType">
+              <option value="github">GitHub Releases</option>
+              <option value="modrinth">Modrinth</option>
+              <option value="curseforge">CurseForge</option>
+              <option value="spigot">SpigotMC（Spiget）</option>
+            </select>
+            <span class="field-hint">每个任务可使用不同的来源平台</span>
+          </div>
+
+          <div class="field" id="field-task-repo">
+            <label class="field-label" for="taskRepo" id="taskSourceLabel">GitHub 仓库</label>
+            <input class="field-input" id="taskRepo" name="source" autocomplete="off" placeholder="owner/repository">
+            <span class="field-hint" id="taskSourceHint">例如 EssentialsX/Essentials</span>
+            <span class="field-error" id="taskSourceError">请输入有效的来源标识</span>
+          </div>
+
+          <div class="field span-2" id="field-task-platform-filters">
+            <div class="form-grid" style="gap:14px">
+              <div class="field">
+                <label class="field-label" for="taskGameVersions">Minecraft 版本筛选</label>
+                <input class="field-input mono" id="taskGameVersions" autocomplete="off" placeholder="1.21.1, 1.20.1">
+                <span class="field-hint">逗号分隔；留空表示不筛选（Modrinth / CurseForge）</span>
+              </div>
+              <div class="field">
+                <label class="field-label" for="taskLoaders">加载器筛选</label>
+                <input class="field-input mono" id="taskLoaders" autocomplete="off" placeholder="fabric, forge, neoforge">
+                <span class="field-hint">逗号分隔；留空表示不筛选（Modrinth / CurseForge）</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="field span-2" id="field-task-regex">
+            <label class="field-label" for="taskRegex">资产文件名正则</label>
+            <input class="field-input mono" id="taskRegex" name="regex" autocomplete="off" placeholder="^artifact-.*\.jar$">
+            <span class="field-hint">GitHub 必填；Modrinth / CurseForge 可选，留空匹配任意文件；Spigot 忽略</span>
+            <span class="field-error">正则表达式无效</span>
+          </div>
+
+          <div class="field" id="field-task-daemon">
+            <label class="field-label" for="taskDaemon">MCSM Daemon ID</label>
+            <input class="field-input mono" id="taskDaemon" name="daemon" autocomplete="off" placeholder="daemon UUID">
+            <span class="field-error">请填写 Daemon ID</span>
+          </div>
+
+          <div class="field" id="field-task-instance">
+            <label class="field-label" for="taskInstance">实例 UUID</label>
+            <input class="field-input mono" id="taskInstance" name="instance" autocomplete="off" placeholder="instance UUID">
+            <span class="field-error">请填写实例 UUID</span>
+          </div>
+
+          <div class="field span-2" id="field-task-target">
+            <label class="field-label" for="taskTarget">实例内目标路径</label>
+            <input class="field-input mono" id="taskTarget" name="target" autocomplete="off" placeholder="/plugins/ 或 /server.jar">
+            <span class="field-hint">以 / 结尾表示目录；文件目标会在上传后自动重命名。例如 /plugins/、/mods/、/server.jar</span>
+            <span class="field-error">请填写有效的绝对路径</span>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="switch-row">
+            <div class="switch-copy">
+              <span class="switch-title">部署后重启实例</span>
+              <span class="switch-hint">文件上传成功后调用 MCSM 重启 API</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="taskRestart" checked>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div class="switch-row" id="taskPrereleaseRow">
+            <div class="switch-copy">
+              <span class="switch-title">包含预发布版本</span>
+              <span class="switch-hint">允许匹配 prerelease Release</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="taskPrerelease">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div class="switch-row span-2">
+            <div class="switch-copy">
+              <span class="switch-title">上传新版前清理旧文件</span>
+              <span class="switch-hint">仅目录目标生效。会删除目标目录中匹配的旧文件，再上传新版</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="taskCleanupOld">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div class="field span-2" id="field-task-cleanup-regex">
+            <label class="field-label" for="taskCleanupRegex">旧文件清理正则（可选）</label>
+            <input class="field-input mono" id="taskCleanupRegex" autocomplete="off" placeholder="^EssentialsX-.*\.jar$">
+            <span class="field-hint">建议填写。用于匹配服务器上已重命名的旧文件；留空则仅清理本地记录的上次部署路径</span>
+            <span class="field-error">清理正则表达式无效</span>
+          </div>
+          <div class="switch-row span-2">
+            <div class="switch-copy">
+              <span class="switch-title">启用此通道</span>
+              <span class="switch-hint">关闭后不参与自动轮询和手动检查</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="taskEnabled" checked>
+              <span class="switch-track"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="m3-btn m3-btn-text is-danger" id="taskDeleteButton" style="display:none">
+          <svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash"></use></svg>删除任务
+        </button>
+        <div class="footer-actions">
+          <button type="button" class="m3-btn m3-btn-text" data-close-dialog="taskDialog">取消</button>
+          <button type="submit" class="m3-btn m3-btn-filled" id="taskSubmitButton">
+            <span class="btn-icon" aria-hidden="true"><svg class="icon icon-sm"><use href="#i-check"></use></svg></span>
+            <span>保存任务</span>
+            <span class="loading loading-spinner btn-spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="m3-dialog" id="batchDialog" aria-labelledby="batchDialogTitle">
+    <form class="dialog-form" id="batchForm" novalidate>
+      <div class="dialog-header">
+        <div>
+          <p class="dialog-eyebrow">BATCH DEPLOYMENT</p>
+          <h2 class="dialog-title" id="batchDialogTitle">批量部署与统一重启</h2>
+          <p class="dialog-subtitle">连续更新多个任务，全部完成后按指定时间统一重启实例。</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-dialog="batchDialog" aria-label="关闭批量部署">
+          <svg class="icon"><use href="#i-close"></use></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-error" id="batchFormError" role="alert">
+          <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+          <span id="batchFormErrorText"></span>
+        </div>
+
+        <div class="dialog-section-title">已登记的统一重启</div>
+        <div class="scheduled-list" id="restartList">
+          <div class="scheduled-empty">暂无待执行的重启计划</div>
+        </div>
+
+        <div class="dialog-section-title">选择更新任务</div>
+        <div class="batch-toolbar">
+          <label class="batch-check-all">
+            <input type="checkbox" id="batchSelectAll">
+            <span>全选已启用任务</span>
+          </label>
+          <span class="batch-count" id="batchSelectedCount">0 个任务</span>
+        </div>
+        <div class="batch-task-list" id="batchTaskList"></div>
+
+        <div class="form-grid">
+          <div class="field" id="field-batch-restart-at">
+            <label class="field-label" for="batchRestartAt">统一重启时间</label>
+            <input class="field-input mono" id="batchRestartAt" type="datetime-local">
+            <span class="field-hint">按本机浏览器时区解释；更新较慢时会自动顺延到任务完成之后</span>
+            <span class="field-error">请选择一个未来的时间</span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="batchRestartMode">重启方式</label>
+            <select class="field-select" id="batchRestartMode">
+              <option value="restart">直接重启实例</option>
+              <option value="stop_then_open">停止 → 等待停止 → 启动</option>
+            </select>
+            <span class="field-hint">在指定时间对每个受影响实例执行一次</span>
+          </div>
+        </div>
+
+        <div class="dialog-note">
+          <svg class="icon" aria-hidden="true"><use href="#i-clock"></use></svg>
+          <span>批量部署期间不会逐个重启实例。全部任务结束后，每个受影响实例会登记一条统一重启；若所选任务属于不同实例，将分别调度。重复登记会合并为同实例的一条计划。</span>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <div class="footer-actions">
+          <button type="button" class="m3-btn m3-btn-text" data-close-dialog="batchDialog">取消</button>
+          <button type="submit" class="m3-btn m3-btn-filled" id="batchSubmitButton">
+            <span class="btn-icon" aria-hidden="true"><svg class="icon icon-sm"><use href="#i-rocket"></use></svg></span>
+            <span>开始批量部署</span>
+            <span class="loading loading-spinner btn-spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="m3-dialog" id="settingsDialog" aria-labelledby="settingsDialogTitle">
+    <form class="dialog-form" id="settingsForm" novalidate>
+      <div class="dialog-header">
+        <div>
+          <p class="dialog-eyebrow">SYSTEM CONFIGURATION</p>
+          <h2 class="dialog-title" id="settingsDialogTitle">系统设置</h2>
+          <p class="dialog-subtitle">修改后即时生效，并写回 config.toml。</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-dialog="settingsDialog" aria-label="关闭设置">
+          <svg class="icon"><use href="#i-close"></use></svg>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-error" id="settingsFormError" role="alert">
+          <svg class="icon" aria-hidden="true"><use href="#i-alert"></use></svg>
+          <span id="settingsFormErrorText"></span>
+        </div>
+
+        <div class="dialog-section-title">调度</div>
+        <div class="form-grid">
+          <div class="field" id="field-settings-interval">
+            <label class="field-label" for="settingsInterval">轮询间隔（秒）</label>
+            <input class="field-input mono" id="settingsInterval" type="number" min="30" max="86400" step="1">
+            <span class="field-hint">最小 30 秒；建议 300–900 秒</span>
+            <span class="field-error">请输入 30–86400 之间的整数</span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="settingsRestartMode">重启策略</label>
+            <select class="field-select" id="settingsRestartMode">
+              <option value="restart">直接重启实例</option>
+              <option value="stop_then_open">停止 → 等待停止 → 启动</option>
+            </select>
+            <span class="field-hint">对启用了「部署后重启」的任务生效</span>
+          </div>
+        </div>
+
+        <div class="dialog-section-title">MCSManager</div>
+        <div class="form-grid">
+          <div class="field span-2" id="field-settings-baseurl">
+            <label class="field-label" for="settingsBaseUrl">面板地址</label>
+            <input class="field-input mono" id="settingsBaseUrl" autocomplete="off" placeholder="http://127.0.0.1:23333">
+            <span class="field-error">请输入有效的 http/https 地址</span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="settingsApiKey">API Key</label>
+            <input class="field-input mono" id="settingsApiKey" type="password" autocomplete="new-password" placeholder="输入新的 API Key">
+            <span class="field-hint" id="apiKeyHint">留空则保持现有密钥不变</span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="settingsDaemonScheme">Daemon 协议</label>
+            <select class="field-select" id="settingsDaemonScheme">
+              <option value="">跟随面板地址</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+            <span class="field-hint">面板 HTTPS、节点 HTTP 时选择 HTTP</span>
+          </div>
+          <div class="field" id="field-settings-timeout">
+            <label class="field-label" for="settingsTimeout">请求超时（秒）</label>
+            <input class="field-input mono" id="settingsTimeout" type="number" min="10" max="1800" step="10">
+            <span class="field-error">请输入 10–1800 之间的整数</span>
+          </div>
+          <div class="switch-row">
+            <div class="switch-copy">
+              <span class="switch-title">跳过 TLS 证书校验</span>
+              <span class="switch-hint">仅用于自签名证书的内网环境</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settingsInsecure">
+              <span class="switch-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="dialog-section-title">GitHub</div>
+        <div class="form-grid">
+          <div class="field span-2">
+            <label class="field-label" for="settingsGithubToken">Personal Access Token</label>
+            <input class="field-input mono" id="settingsGithubToken" type="password" autocomplete="new-password" placeholder="ghp_…（可选）">
+            <span class="field-hint" id="githubTokenHint">留空则保持现有 Token 不变；匿名限额 60 次/小时</span>
+          </div>
+          <div class="field span-2" id="field-settings-githubapi">
+            <label class="field-label" for="settingsGithubApi">GitHub API 地址</label>
+            <input class="field-input mono" id="settingsGithubApi" autocomplete="off" placeholder="https://api.github.com">
+            <span class="field-hint">GitHub Enterprise 可改为自定义 API 地址</span>
+            <span class="field-error">请输入有效的 http/https 地址</span>
+          </div>
+          <div class="field span-2">
+            <label class="field-label">配置文件</label>
+            <div class="dialog-note">
+              <svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg>
+              <span class="mono" id="settingsPath">—</span>
+            </div>
+            <span class="field-hint">修改监听地址需重启进程；其余配置支持热更新。</span>
+          </div>
+        </div>
+
+        <div class="dialog-section-title">内容平台</div>
+        <div class="form-grid">
+          <div class="field span-2">
+            <label class="field-label" for="settingsCurseforgeKey">CurseForge API Key</label>
+            <input class="field-input mono" id="settingsCurseforgeKey" type="password" autocomplete="new-password" placeholder="输入 CurseForge API Key">
+            <span class="field-hint" id="curseforgeKeyHint">仅 CurseForge 来源需要；留空保持现有 Key 不变</span>
+          </div>
+          <div class="field span-2">
+            <div class="dialog-note">
+              <svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg>
+              <span>Modrinth 不需要密钥。SpigotMC 通过 Spiget 社区 API 访问；外部托管资源只提供页面 URL 时无法自动下载，会给出明确错误，请改用 GitHub 或 Modrinth 来源。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <div class="footer-actions">
+          <button type="button" class="m3-btn m3-btn-text" data-close-dialog="settingsDialog">取消</button>
+          <button type="submit" class="m3-btn m3-btn-filled" id="settingsSubmitButton">
+            <span class="btn-icon" aria-hidden="true"><svg class="icon icon-sm"><use href="#i-check"></use></svg></span>
+            <span>保存设置</span>
+            <span class="loading loading-spinner btn-spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="m3-dialog dialog-small" id="confirmDialog" aria-labelledby="confirmTitle">
+    <div class="dialog-header">
+      <div>
+        <p class="dialog-eyebrow">CONFIRM ACTION</p>
+        <h2 class="dialog-title" id="confirmTitle">确认操作</h2>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <p class="confirm-copy" id="confirmMessage"></p>
+    </div>
+    <div class="dialog-footer">
+      <div class="footer-actions">
+        <button type="button" class="m3-btn m3-btn-text" id="confirmCancel">取消</button>
+        <button type="button" class="m3-btn m3-btn-filled" id="confirmAccept">确认</button>
+      </div>
+    </div>
+  </dialog>
+
+  <noscript>
+    <div style="padding:24px;color:#F2B8B5">此控制台需要启用 JavaScript。</div>
+  </noscript>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

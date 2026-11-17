@@ -1,0 +1,134 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    outputs:
+      Asset_Name: ${{ steps.Find_Asset.outputs.Asset_Name }}
+      Version: ${{ steps.Get_Version.outputs.Version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Set Up Zig
+        uses: mlugg/setup-zig@v2
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Get Version from Cargo
+        id: Get_Version
+        run: |
+          set -e
+          VERSION=$(grep '^version = ' Cargo.toml | head -n1 | awk -F'"' '{print $2}')
+          VERSION=${VERSION#v}
+          if [ -z "$VERSION" ]; then
+            echo "Failed to read version from Cargo.toml" >&2
+            exit 1
+          fi
+          echo "Version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Build Static Binary
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl
+
+      - name: Locate MCSM-Auto-Deployer Binary
+        id: Find_Asset
+        run: |
+          set -e
+          BIN=target/x86_64-unknown-linux-musl/release/mcsm-auto-deployer
+          if [ ! -f "$BIN" ]; then
+            echo "No suitable binary found at $BIN" >&2
+            ls -la target/x86_64-unknown-linux-musl/release || true
+            exit 1
+          fi
+          mkdir -p build/release
+          ASSET=build/release/mcsm-auto-deployer-linux-x86_64
+          cp "$BIN" "$ASSET"
+          chmod +x "$ASSET"
+          (cd build/release && sha256sum mcsm-auto-deployer-linux-x86_64 > SHA256SUMS)
+          echo "Asset_Path=$ASSET" >> "$GITHUB_OUTPUT"
+          echo "Asset_Name=$(basename "$ASSET")" >> "$GITHUB_OUTPUT"
+          echo "Selected binary: $ASSET"
+          file "$ASSET"
+
+      - name: Upload MCSM-Auto-Deployer Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCSM-Auto-Deployer-Artifacts
+          path: |
+            build/release/mcsm-auto-deployer-linux-x86_64
+            build/release/SHA256SUMS
+          if-no-files-found: error
+
+  Release:
+    name: Publish Release
+    needs: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: MCSM-Auto-Deployer-Artifacts
+          path: Release-Assets/MCSM-Auto-Deployer-Artifacts
+
+      - name: List Release Assets
+        run: |
+          find Release-Assets -type f | sort
+
+      - name: Publish Release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v${{ needs.Build.outputs.Version }}
+          name: MCSM-Auto-Deployer v${{ needs.Build.outputs.Version }}
+          prerelease: false
+          allowUpdates: true
+          makeLatest: true
+          artifactErrorsFailBuild: true
+          removeArtifacts: true
+          artifacts: |
+            Release-Assets/MCSM-Auto-Deployer-Artifacts/mcsm-auto-deployer-linux-x86_64
+            Release-Assets/MCSM-Auto-Deployer-Artifacts/SHA256SUMS
+          body: |
+            ## 🚀 MCSM-Auto-Deployer v${{ needs.Build.outputs.Version }}
+
+            Automated build triggered by commit [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) on `${{ github.ref_name }}`.
+
+            ### 📦 Included Artifacts
+            - **Linux x86_64 static binary**: `${{ needs.Build.outputs.Asset_Name }}`
+            - **SHA-256 checksum**: `SHA256SUMS`
+
+            ### 🛠️ Installation
+            1. Download the static binary and `SHA256SUMS` from the assets below.
+            2. Verify the checksum with `sha256sum -c SHA256SUMS`.
+            3. Make the binary executable with `chmod +x mcsm-auto-deployer-linux-x86_64`.
+            4. Copy and edit your `config.toml`, then run `./mcsm-auto-deployer-linux-x86_64 --config config.toml`.
+            5. Open the web dashboard at `http://<server>:8080`.
+
+            ### 📝 Changelog
+            The full changelog is auto-generated below. 👇
+
+            ---
+            _If you encounter any issues, please open an Issue and include your environment, MCSM version, relevant logs, config snippets, and reproduction steps._
+          generateReleaseNotes: true

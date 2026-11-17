@@ -1,0 +1,79 @@
+[server]
+bind = "0.0.0.0:8080"
+poll_interval_secs = 600
+state_file = "data/state.json"
+log_history = 500
+
+[mcsm]
+base_url = "https://server-backend.mooire.top"
+api_key = "6dc9eb5f034d40dcbd34335ea72ea55b"
+timeout_secs = 180
+restart_mode = "restart"
+daemon_scheme = "https"
+accept_invalid_certs = false
+
+[github]
+api_base = "https://api.github.com"
+token = ""
+user_agent = "MCSM-Auto-Deployer/0.1"
+
+[providers]
+modrinth_base = "https://api.modrinth.com/v2"
+curseforge_base = "https://api.curseforge.com/v1"
+curseforge_api_key = ""
+spiget_base = "https://api.spiget.org/v2"
+user_agent = "MCSM-Auto-Deployer/0.1"
+
+[[tasks]]
+id = "lophine-core"
+name = "Lophine 服务端核心"
+category = "core"
+enabled = true
+source_type = "github"
+source = "LophineLabs/Lophine"
+asset_regex = '^lophine-.*\.jar$'
+include_prerelease = false
+game_versions = []
+loaders = []
+mcsm_daemon_id = "85f05f4168334f3ca2269386100ed9eb"
+mcsm_instance_uuid = "3365e3b2fa8e441d82010c192f32aa7e"
+mcsm_target_path = "/server.jar"
+restart = true
+cleanup_old = false
+cleanup_regex = ""
+
+[[tasks]]
+id = "essentialsx-plugin"
+name = "EssentialsX 基础插件"
+category = "plugin"
+enabled = false
+source_type = "github"
+source = "EssentialsX/Essentials"
+asset_regex = '^EssentialsX-.*\.jar$'
+include_prerelease = false
+game_versions = []
+loaders = []
+mcsm_daemon_id = "YOUR_DAEMON_UUID"
+mcsm_instance_uuid = "YOUR_INSTANCE_UUID"
+mcsm_target_path = "/plugins/"
+restart = true
+cleanup_old = true
+cleanup_regex = '^EssentialsX-.*\.jar$'
+
+[[tasks]]
+id = "fabric-api-mod"
+name = "Fabric API"
+category = "mod"
+enabled = false
+source_type = "github"
+source = "FabricMC/fabric-api"
+asset_regex = '^fabric-api-.*\.jar$'
+include_prerelease = false
+game_versions = []
+loaders = []
+mcsm_daemon_id = "YOUR_DAEMON_UUID"
+mcsm_instance_uuid = "YOUR_INSTANCE_UUID"
+mcsm_target_path = "/mods/"
+restart = true
+cleanup_old = true
+cleanup_regex = '^fabric-api-.*\.jar$'

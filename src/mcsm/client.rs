@@ -239,19 +239,17 @@ impl McsmClient {
             .map(str::trim)
             .filter(|value| !value.is_empty())
         {
-            format!(
-                "{}://{}/upload/{}",
-                self.daemon_scheme, addr, passport.password
-            )
+            addr.to_string()
         } else {
             return Err(McsmError::MissingUploadAddress);
         };
 
-        let absolute = if raw.contains("://") {
-            raw
-        } else {
-            format!("{}://{}", self.daemon_scheme, raw)
-        };
+        // MCSM stores the daemon address as a WebSocket origin (ws:// or
+        // wss://). File transfer itself is still an HTTP(S) endpoint, and the
+        // official panel frontend converts wss -> https and ws -> http before
+        // POSTing to /upload/{password}. Mirror that conversion here, keeping
+        // any daemon URL prefix intact.
+        let absolute = normalize_daemon_http_origin(&raw, &self.daemon_scheme)?;
         let mut url = Url::parse(&absolute)
             .map_err(|error| McsmError::Config(format!("Daemon 上传地址无效: {error}")))?;
         let password = passport.password.as_str();
@@ -552,6 +550,24 @@ impl McsmClient {
     }
 }
 
+fn normalize_daemon_http_origin(raw: &str, fallback_scheme: &str) -> Result<String, McsmError> {
+    let value = raw.trim();
+    if value.is_empty() {
+        return Err(McsmError::MissingUploadAddress);
+    }
+    let lower = value.to_ascii_lowercase();
+    let normalized = if lower.starts_with("wss://") {
+        format!("https://{}", &value[6..])
+    } else if lower.starts_with("ws://") {
+        format!("http://{}", &value[5..])
+    } else if lower.starts_with("https://") || lower.starts_with("http://") {
+        value.to_string()
+    } else {
+        format!("{}://{}", fallback_scheme, value)
+    };
+    Ok(normalized)
+}
+
 fn sanitize_network_error(error: reqwest::Error) -> McsmError {
     // Strip the URL so a query-string API key can never leak into logs.
     McsmError::Network(error.without_url())
@@ -673,6 +689,22 @@ mod tests {
         match client.daemon_upload_url(&legacy) {
             Ok(url) => assert_eq!(url.path(), "/upload/secret"),
             Err(error) => assert!(false, "legacy URL failed: {error}"),
+        }
+
+        let websocket_tls = UploadPassport {
+            password: "wsspass".to_string(),
+            addr: Some("wss://node.example.com:443".to_string()),
+            upload_address: None,
+            remote_mappings: None,
+        };
+        match client.daemon_upload_url(&websocket_tls) {
+            Ok(url) => {
+                assert_eq!(url.scheme(), "https");
+                assert_eq!(url.host_str(), Some("node.example.com"));
+                assert_eq!(url.port_or_known_default(), Some(443));
+                assert_eq!(url.path(), "/upload/wsspass");
+            }
+            Err(error) => assert!(false, "wss URL failed: {error}"),
         }
     }
 }

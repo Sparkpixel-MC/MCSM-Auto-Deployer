@@ -503,6 +503,8 @@ file=@artifact.jar
 
 文件字节**绝不**提交到面板的 `/api/files/upload`。
 
+> MCSM 面板可能返回 `ws://` 或 `wss://` 形式的 Daemon 地址（Socket.IO 使用）。程序会按官方前端的转换逻辑将 `wss://` 转为 `https://`、`ws://` 转为 `http://`，再 POST 到 `/upload/{password}`；文件上传本身仍是 HTTP(S) multipart 请求。
+
 - **文件目标重命名**：上传后通过面板 `PUT /api/files/move` 将资产移动到目标路径，例如 `/lophine-0.9.2.jar` → `/server.jar`。该能力始终启用，不需要额外开关。
 - **旧版清理**：如果任务开启 `cleanup_old`，在下载和 SHA-256 校验完成后、上传前，通过 `GET /api/files/list` 列出目录，再通过 `DELETE /api/files` 删除匹配的旧文件。删除前会排除即将上传的新文件名。
 - **重启**：单任务立即执行 `/api/protected_instance/restart`（或 stop → 等待 status=0 → open）；批量任务先跳过重启，全部结束后把统一重启计划持久化，由独立调度器在指定时间执行一次。

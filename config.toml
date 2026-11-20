@@ -17,14 +17,14 @@ api_retry_attempts = 4
 [github]
 api_base = "https://api.github.com"
 token = ""
-user_agent = "MCSM-Auto-Deployer/0.1"
+user_agent = "MCSM-Auto-Deployer/1.0.0"
 
 [providers]
 modrinth_base = "https://api.modrinth.com/v2"
 curseforge_base = "https://api.curseforge.com/v1"
 curseforge_api_key = ""
 spiget_base = "https://api.spiget.org/v2"
-user_agent = "MCSM-Auto-Deployer/0.1"
+user_agent = "MCSM-Auto-Deployer/1.0.0"
 
 [[tasks]]
 id = "lophine-core"

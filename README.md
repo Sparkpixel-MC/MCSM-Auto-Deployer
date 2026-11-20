@@ -350,14 +350,14 @@ api_retry_attempts = 4           # 「操作冷却中」时的总尝试次数（
 [github]
 token = ""                       # 可留空；建议配置 PAT 提高限额
 api_base = "https://api.github.com"
-user_agent = "MCSM-Auto-Deployer/0.1"
+user_agent = "MCSM-Auto-Deployer/1.0.0"
 
 [providers]
 modrinth_base = "https://api.modrinth.com/v2"
 curseforge_base = "https://api.curseforge.com/v1"
 curseforge_api_key = ""          # CurseForge 来源必填
 spiget_base = "https://api.spiget.org/v2"
-user_agent = "MCSM-Auto-Deployer/0.1"
+user_agent = "MCSM-Auto-Deployer/1.0.0"
 
 [[tasks]]
 id = "lophine-core"              # 可省略，程序会从 name 生成稳定 slug

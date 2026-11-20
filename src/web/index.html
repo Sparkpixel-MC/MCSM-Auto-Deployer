@@ -2951,6 +2951,12 @@
             <span class="field-hint">遇到 MCSM「此操作冷却中」或 Daemon 5xx 直传失败时自动重试</span>
             <span class="field-error">请输入 1–10 之间的整数</span>
           </div>
+          <div class="field" id="field-settings-url-threshold">
+            <label class="field-label" for="settingsUrlThreshold">URL 下载阈值（MB）</label>
+            <input class="field-input mono" id="settingsUrlThreshold" type="number" min="0" max="4096" step="1">
+            <span class="field-hint">文件达到此大小后由 Daemon 从公开 URL 下载，避免大文件直传；0 表示关闭</span>
+            <span class="field-error">请输入 0–4096 之间的整数</span>
+          </div>
           <div class="switch-row">
             <div class="switch-copy">
               <span class="switch-title">跳过 TLS 证书校验</span>

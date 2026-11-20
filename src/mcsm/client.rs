@@ -6,8 +6,9 @@
 
 use crate::config::{McsmConfig, RestartMode, TaskConfig};
 use crate::mcsm::types::{
-    ApiEnvelope, DeleteFilesRequest, FileEntry, FileListData, InstanceDetail,
+    ApiEnvelope, DeleteFilesRequest, FileEntry, FileListData, FileStatusData, InstanceDetail,
     InstanceOperationData, MoveFilesRequest, UploadOutcome, UploadPassport, UploadTarget,
+    UrlDownloadRequest,
 };
 use reqwest::{Client, Method, Response, Url};
 use serde::de::DeserializeOwned;
@@ -496,6 +497,139 @@ impl McsmClient {
             format!("Daemon 直传完成（{}）", format_bytes(size)),
         );
         Ok(size)
+    }
+
+    /// Ask the daemon to download a public URL directly into the instance.
+    /// This bypasses the panel/direct upload data plane and therefore the
+    /// 8 MiB piece forwarding limit that can produce HTTP 502 responses.
+    pub async fn download_from_url_and_wait<F>(
+        &self,
+        task: &TaskConfig,
+        url: &str,
+        file_name: &str,
+        expected_size: u64,
+        mut progress: F,
+    ) -> Result<u64, McsmError>
+    where
+        F: FnMut(u64, Option<u64>),
+    {
+        self.emit(
+            "url_download",
+            McsmEventKind::Started,
+            format!("请求 Daemon 从外部 URL 下载到 {file_name}"),
+        );
+        let body = serde_json::to_value(UrlDownloadRequest { url, file_name })
+            .map_err(McsmError::Decode)?;
+        let result = self
+            .request_json::<Value>(
+                Method::POST,
+                "api/files/download_from_url",
+                &[
+                    ("daemonId", &task.mcsm_daemon_id),
+                    ("uuid", &task.mcsm_instance_uuid),
+                ],
+                Some(body),
+            )
+            .await;
+        if let Err(error) = result {
+            self.emit(
+                "url_download",
+                McsmEventKind::Failed,
+                format!("启动 URL 下载失败: {error}"),
+            );
+            return Err(error);
+        }
+
+        let deadline = tokio::time::Instant::now() + self.timeout.max(Duration::from_secs(1_800));
+        let target = file_name.trim_start_matches('/');
+        let mut seen = false;
+        let mut last_progress = 0_u64;
+        loop {
+            let status: FileStatusData = self
+                .request_json(
+                    Method::GET,
+                    "api/files/status",
+                    &[
+                        ("daemonId", &task.mcsm_daemon_id),
+                        ("uuid", &task.mcsm_instance_uuid),
+                    ],
+                    None,
+                )
+                .await?;
+            if let Some(download) = status
+                .download_tasks
+                .iter()
+                .find(|download| download.path.trim_start_matches('/') == target)
+            {
+                if !seen {
+                    tracing::info!(
+                        task_id = %download.task_id,
+                        path = %download.path,
+                        "已找到 MCSM URL 下载任务"
+                    );
+                }
+                seen = true;
+                let total = if download.total > 0 {
+                    download.total
+                } else {
+                    expected_size
+                };
+                match download.status {
+                    0 => {
+                        if download.current != last_progress {
+                            last_progress = download.current;
+                            progress(download.current, Some(total));
+                            tracing::debug!(
+                                path = %file_name,
+                                current = download.current,
+                                total,
+                                "MCSM URL 下载进度"
+                            );
+                        }
+                    }
+                    1 => {
+                        progress(total, Some(total));
+                        self.emit(
+                            "url_download",
+                            McsmEventKind::Finished,
+                            format!("URL 下载完成（{total} bytes）"),
+                        );
+                        return Ok(total);
+                    }
+                    2 => {
+                        let detail = download
+                            .error
+                            .clone()
+                            .unwrap_or_else(|| "MCSM 未返回错误详情".to_string());
+                        self.emit(
+                            "url_download",
+                            McsmEventKind::Failed,
+                            format!("URL 下载失败: {detail}"),
+                        );
+                        return Err(McsmError::File(format!("MCSM URL 下载失败: {detail}")));
+                    }
+                    other => {
+                        tracing::debug!(status = other, "MCSM URL 下载状态未知");
+                    }
+                }
+            } else if seen {
+                // The daemon keeps completed/error tasks for about one second,
+                // so an immediately-disappearing task is ambiguous. Keep
+                // polling until the deadline instead of assuming success.
+                tracing::debug!(path = %file_name, "MCSM URL 下载任务暂时不在列表中");
+            }
+            if tokio::time::Instant::now() >= deadline {
+                self.emit(
+                    "url_download",
+                    McsmEventKind::Failed,
+                    "URL 下载等待超时".to_string(),
+                );
+                return Err(McsmError::File(
+                    "MCSM URL 下载等待超时，请检查 Daemon 到来源的连通性".to_string(),
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
     }
 
     async fn move_file(
@@ -998,6 +1132,7 @@ mod tests {
             accept_invalid_certs: false,
             api_min_interval_ms: 0,
             api_retry_attempts: 4,
+            url_download_threshold_mb: 8,
         }
     }
 
@@ -1080,6 +1215,109 @@ mod tests {
             }
             Err(error) => assert!(false, "wss URL failed: {error}"),
         }
+    }
+
+    #[tokio::test]
+    async fn url_download_waits_for_daemon_task_completion() {
+        use axum::{
+            extract::State,
+            routing::{get, post},
+            Json, Router,
+        };
+        use serde_json::json;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        #[derive(Clone)]
+        struct MockState {
+            posts: Arc<AtomicUsize>,
+            statuses: Arc<AtomicUsize>,
+        }
+
+        async fn start(State(state): State<MockState>, _body: axum::body::Bytes) -> Json<Value> {
+            state.posts.fetch_add(1, Ordering::SeqCst);
+            Json(json!({ "status": 200, "data": "task-1" }))
+        }
+
+        async fn status(State(state): State<MockState>) -> Json<Value> {
+            let number = state.statuses.fetch_add(1, Ordering::SeqCst);
+            let (current, task_status) = if number == 0 { (25, 0) } else { (100, 1) };
+            Json(json!({
+                "status": 200,
+                "data": {
+                    "downloadTasks": [{
+                        "taskId": "task-1",
+                        "path": "/plugins/url.jar",
+                        "total": 100,
+                        "current": current,
+                        "status": task_status
+                    }]
+                }
+            }))
+        }
+
+        let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(error) => {
+                assert!(false, "bind URL mock failed: {error}");
+                return;
+            }
+        };
+        let address = match listener.local_addr() {
+            Ok(address) => address,
+            Err(error) => {
+                assert!(false, "mock address failed: {error}");
+                return;
+            }
+        };
+        let posts = Arc::new(AtomicUsize::new(0));
+        let statuses = Arc::new(AtomicUsize::new(0));
+        let state = MockState {
+            posts: Arc::clone(&posts),
+            statuses: Arc::clone(&statuses),
+        };
+        let app = Router::new()
+            .route("/api/files/download_from_url", post(start))
+            .route("/api/files/status", get(status))
+            .with_state(state);
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let mut config = test_config();
+        config.base_url = format!("http://{address}");
+        config.api_min_interval_ms = 0;
+        let client = match McsmClient::new(&config) {
+            Ok(client) => client,
+            Err(error) => {
+                assert!(false, "test client construction failed: {error}");
+                return;
+            }
+        };
+        let task = TaskConfig {
+            mcsm_daemon_id: "daemon".to_string(),
+            mcsm_instance_uuid: "instance".to_string(),
+            ..TaskConfig::default()
+        };
+        let mut last = (0_u64, None);
+        let result = client
+            .download_from_url_and_wait(
+                &task,
+                "https://example.com/url.jar",
+                "/plugins/url.jar",
+                100,
+                |current, total| last = (current, total),
+            )
+            .await;
+        match result {
+            Ok(bytes) => assert_eq!(bytes, 100),
+            Err(error) => {
+                assert!(false, "URL download should complete: {error}");
+                return;
+            }
+        }
+        assert_eq!(last, (100, Some(100)));
+        assert_eq!(posts.load(Ordering::SeqCst), 1);
+        assert_eq!(statuses.load(Ordering::SeqCst), 2);
     }
 
     #[test]

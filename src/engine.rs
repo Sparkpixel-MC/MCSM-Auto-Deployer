@@ -6,6 +6,7 @@
 
 use crate::config::{RestartMode, TaskConfig};
 use crate::logs::now_ms;
+use crate::mcsm::types::UploadOutcome;
 use crate::mcsm::{McsmClient, McsmEvent, McsmEventKind, McsmEventSink};
 use crate::sources::ResolvedArtifact;
 use crate::state::{AppState, DownloadProgress, TaskPhase};
@@ -624,20 +625,144 @@ impl Engine {
             });
         }
 
-        self.state.update_runtime(&task.id, |runtime| {
-            runtime.phase = TaskPhase::Uploading;
-            runtime.start_step("credential", "准备申请上传凭证");
-            runtime.progress = None;
-        });
-        tracing::info!(
-            task_id = %task.id,
-            target = %task.mcsm_target_path,
-            "开始上传到 MCSM 实例"
-        );
-        let upload = mcsm
-            .upload_and_place(task, &download_path, &artifact.asset_name)
-            .await
-            .context("MCSM 上传流程失败")?;
+        let target = McsmClient::resolve_target(task, &artifact.asset_name)?;
+        let threshold_bytes = config
+            .mcsm
+            .url_download_threshold_mb
+            .saturating_mul(1024 * 1024);
+        let url_candidate =
+            if threshold_bytes > 0 && artifact.size > 0 && artifact.size >= threshold_bytes {
+                artifact.url_download.clone()
+            } else {
+                None
+            };
+
+        if url_candidate.is_none() {
+            let reason = if threshold_bytes == 0 {
+                "URL 下载阈值已关闭"
+            } else if artifact.url_download.is_none() {
+                "来源未提供可公开访问的下载 URL"
+            } else if artifact.size == 0 {
+                "来源未提供文件大小，无法判断阈值"
+            } else {
+                "文件小于 URL 下载阈值"
+            };
+            self.state.update_runtime(&task.id, |runtime| {
+                runtime.skip_step("url_download", reason);
+            });
+        }
+
+        let mut upload: Option<UploadOutcome> = None;
+        if let Some(url) = url_candidate {
+            self.state.update_runtime(&task.id, |runtime| {
+                runtime.phase = TaskPhase::UrlDownloading;
+                runtime.start_step(
+                    "url_download",
+                    format!("文件 {}，使用 Daemon URL 下载", format_bytes(artifact.size)),
+                );
+                runtime.progress = Some(DownloadProgress {
+                    downloaded: 0,
+                    total: Some(artifact.size),
+                    percent: 0.0,
+                });
+            });
+            tracing::info!(
+                task_id = %task.id,
+                bytes = artifact.size,
+                threshold_mb = config.mcsm.url_download_threshold_mb,
+                target = %target.final_path,
+                source_url = %url,
+                "文件达到 URL 下载阈值，交给 MCSM Daemon 自行下载"
+            );
+            let state = Arc::clone(&self.state);
+            let task_id = task.id.clone();
+            let result = mcsm
+                .download_from_url_and_wait(
+                    task,
+                    &url,
+                    &target.final_path,
+                    artifact.size,
+                    |downloaded, total| {
+                        let percent = total
+                            .filter(|total| *total > 0)
+                            .map(|total| (downloaded as f64 / total as f64 * 100.0).min(100.0))
+                            .unwrap_or(0.0);
+                        state.update_runtime(&task_id, |runtime| {
+                            runtime.progress = Some(DownloadProgress {
+                                downloaded,
+                                total,
+                                percent,
+                            });
+                        });
+                    },
+                )
+                .await;
+            match result {
+                Ok(bytes) => {
+                    let bytes = if bytes > 0 { bytes } else { artifact.size };
+                    self.state.update_runtime(&task.id, |runtime| {
+                        runtime.phase = TaskPhase::Uploading;
+                        runtime.finish_step(
+                            "url_download",
+                            format!("URL 下载完成 · {}", format_bytes(bytes)),
+                        );
+                        runtime.skip_step("credential", "URL 下载无需上传凭证");
+                        runtime.skip_step("daemon_upload", "已由 Daemon 直接下载，无需直传");
+                        runtime.skip_step("rename", "URL 下载已直接写入目标路径");
+                        runtime.progress = Some(DownloadProgress {
+                            downloaded: bytes,
+                            total: Some(bytes),
+                            percent: 100.0,
+                        });
+                    });
+                    tracing::info!(
+                        task_id = %task.id,
+                        bytes,
+                        final_path = %target.final_path,
+                        "MCSM URL 下载完成"
+                    );
+                    upload = Some(UploadOutcome {
+                        upload_dir: target.upload_dir.clone(),
+                        uploaded_path: target.final_path.clone(),
+                        final_path: target.final_path.clone(),
+                        bytes,
+                    });
+                }
+                Err(error) => {
+                    self.state.update_runtime(&task.id, |runtime| {
+                        runtime
+                            .fail_step("url_download", format!("URL 下载失败，回退直传: {error}"));
+                    });
+                    tracing::warn!(
+                        task_id = %task.id,
+                        error = %error,
+                        "MCSM URL 下载失败，回退到本地下载文件直传"
+                    );
+                }
+            }
+        }
+
+        if upload.is_none() {
+            self.state.update_runtime(&task.id, |runtime| {
+                runtime.phase = TaskPhase::Uploading;
+                runtime.start_step("credential", "准备申请上传凭证");
+                runtime.progress = None;
+            });
+            tracing::info!(
+                task_id = %task.id,
+                target = %task.mcsm_target_path,
+                "开始上传到 MCSM 实例"
+            );
+            let direct = mcsm
+                .upload_and_place(task, &download_path, &artifact.asset_name)
+                .await
+                .context("MCSM 上传流程失败")?;
+            upload = Some(direct);
+        }
+        let upload = match upload {
+            Some(upload) => upload,
+            None => return Err(anyhow!("MCSM 没有返回上传结果")),
+        };
         tracing::info!(
             task_id = %task.id,
             bytes = upload.bytes,

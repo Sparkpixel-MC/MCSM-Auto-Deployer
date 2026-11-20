@@ -15,6 +15,7 @@
 - **MCSM 两步上传**：面板只签发一次性凭证，文件字节直传 Daemon，不经过面板 API。
 - **MCSM API 节流与冷却重试**：面板调用共享最小间隔，遇到「此操作冷却中」会自动等待并重试；避免上传末尾的 `api/files/move` 偶发失败。
 - **Daemon 直传重试**：遇到上传 408/429/5xx 或连接超时时，会等待后重新申请全新上传凭证并重传，避免 `piece at ... failed on all targets` 这类 502 直接终止部署。
+- **大文件 URL 下载模式**：达到 `url_download_threshold_mb` 的文件不再直传，而是让 MCSM Daemon 通过来源公开 URL 自行下载到目标路径；URL 下载失败自动回退直传。
 - **部署过程可视化**：每张任务卡可打开过程对话框，查看检查、下载、校验、清理、凭证、直传、重命名、重启的实时状态、耗时和 API 重试次数。
 - 文件目标自动重命名：例如上传 `lophine-0.9.2.jar` 后移动为 `/server.jar`。
 - 目录目标保留资产原名：`/plugins/`、`/mods/`。
@@ -35,10 +36,10 @@
 - 检查、下载、校验、旧版清理、上传、重启各阶段状态
 - 当前资产名、执行错误或下载进度
 - 待统一重启标记
-- 当前内部动作（申请凭证、直传 Daemon、冷却重试、重命名等）
+- 当前内部动作（URL 下载、申请凭证、直传 Daemon、冷却重试、重命名等）
 - 「立即检查」「立即更新」「过程」「编辑」操作
 
-顶部「批量部署」对话框可选择多个任务、指定统一重启时间，并管理/取消已登记的重启计划。每张任务卡的「过程」按钮会打开部署时间线，展示内部步骤、当前动作、耗时、重试次数与失败原因。设置对话框可以修改轮询间隔、MCSM 面板地址、API Key、Daemon 协议、API 操作间隔、冷却重试次数、重启策略、GitHub Token、CurseForge API Key 等。已配置的密钥不会下发到浏览器；留空提交表示保持原密钥。
+顶部「批量部署」对话框可选择多个任务、指定统一重启时间，并管理/取消已登记的重启计划。每张任务卡的「过程」按钮会打开部署时间线，展示内部步骤、当前动作、耗时、重试次数与失败原因。设置对话框可以修改轮询间隔、MCSM 面板地址、API Key、Daemon 协议、API 操作间隔、冷却/上传重试次数、URL 下载阈值、重启策略、GitHub Token、CurseForge API Key 等。已配置的密钥不会下发到浏览器；留空提交表示保持原密钥。
 
 ## 架构
 
@@ -347,6 +348,7 @@ restart_mode = "restart"         # restart | stop_then_open
 accept_invalid_certs = false     # 仅自签名内网建议开启
 api_min_interval_ms = 800        # 面板 API 最小间隔；并发部署可调到 1000–1500
 api_retry_attempts = 4           # 冷却 / Daemon 5xx 上传的总尝试次数（1–10）
+url_download_threshold_mb = 8    # 文件达到此大小改用 Daemon URL 下载；0 关闭
 
 [github]
 token = ""                       # 可留空；建议配置 PAT 提高限额
@@ -518,6 +520,7 @@ file=@artifact.jar
 - **文件目标重命名**：上传后通过面板 `PUT /api/files/move` 将资产移动到目标路径，例如 `/lophine-0.9.2.jar` → `/server.jar`。该能力始终启用，不需要额外开关。
 - **旧版清理**：如果任务开启 `cleanup_old`，在下载和 SHA-256 校验完成后、上传前，通过 `GET /api/files/list` 列出目录，再通过 `DELETE /api/files` 删除匹配的旧文件。删除前会排除即将上传的新文件名。
 - **重启**：单任务立即执行 `/api/protected_instance/restart`（或 stop → 等待 status=0 → open）；批量任务先跳过重启，全部结束后把统一重启计划持久化，由独立调度器在指定时间执行一次。
+- **大文件 URL 下载**：文件大小达到 `url_download_threshold_mb` 且来源提供公开 URL 时，调用面板 `POST /api/files/download_from_url`，Daemon 直接写入最终目标路径；之后轮询 `GET /api/files/status` 的 `downloadTasks`（0 下载中、1 完成、2 失败）。失败会自动回退到常规直传。URL 模式仍会先在本地下载并校验 SHA-256，确保完整性和回退能力。
 
 核心实现带详细边界注释，见 `src/mcsm/client.rs` 与 `src/engine.rs`。
 
@@ -541,6 +544,7 @@ file=@artifact.jar
 - 文件任务会覆盖目标文件，不提供回滚/备份。重要服务器建议配合世界与配置备份。
 - CurseForge 中作者禁用第三方分发的文件没有 `downloadUrl`，无法自动下载。
 - Spigot 通过 Spiget 社区 API 访问，仅保证 Spigot 托管文件可下载；外部托管资源会给出明确错误。部分资源可能触发 Cloudflare/登录限制，建议优先使用项目的 GitHub 或 Modrinth 来源。
+- URL 下载模式要求 Daemon 能直接访问来源公开 URL；私有 GitHub 仓库的 `browser_download_url` 通常不可匿名访问，会自动回退本地下载后直传。URL 模式仍会占用本机一次下载和临时磁盘空间，用于 SHA-256 校验与回退。
 - 统一重启每个实例同一时间只保留一条 pending 计划；重复登记会合并。计划时间早于批量任务完成时会自动顺延至少 5 秒。
 - 轮询间隔硬下限为 30 秒，避免无意义的 Rate Limit 消耗。
 - 页面样式依赖 Google Fonts、Tailwind CSS 4 Browser、DaisyUI 5 的 CDN；核心布局同时有内联 fallback CSS，CDN 不可用时仍可操作，但字体和少数 DaisyUI 细节会退化。

@@ -23,6 +23,7 @@ pub enum TaskPhase {
     Downloading,
     Verifying,
     Cleaning,
+    UrlDownloading,
     Uploading,
     Restarting,
     UpToDate,
@@ -40,6 +41,7 @@ impl TaskPhase {
                 | Self::Downloading
                 | Self::Verifying
                 | Self::Cleaning
+                | Self::UrlDownloading
                 | Self::Uploading
                 | Self::Restarting
         )
@@ -127,6 +129,7 @@ impl TaskRuntime {
             TaskStep::new("download", "下载资产"),
             TaskStep::new("verify", "SHA-256 校验"),
             TaskStep::new("cleanup", "清理旧版"),
+            TaskStep::new("url_download", "Daemon URL 下载"),
             TaskStep::new("credential", "申请上传凭证"),
             TaskStep::new("daemon_upload", "直传 Daemon"),
             TaskStep::new("rename", "重命名文件"),

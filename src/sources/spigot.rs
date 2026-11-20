@@ -99,6 +99,7 @@ pub async fn resolve(
         release_url: Some(format!("https://www.spigotmc.org/resources/{resource_id}/")),
         published_at: None,
         asset_name,
+        url_download: Some(download_url.clone()),
         download_url,
         size: file.map(|value| value.size).unwrap_or(0),
         expected_sha256: None,

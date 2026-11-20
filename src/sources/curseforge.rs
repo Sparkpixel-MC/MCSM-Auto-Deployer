@@ -111,6 +111,7 @@ pub async fn resolve(
             release_url: Some(format!("https://www.curseforge.com/projects/{mod_id}")),
             published_at: file.file_date.clone(),
             asset_name: file.file_name,
+            url_download: Some(download_url.clone()),
             download_url,
             size: file.file_length,
             expected_sha256: None,

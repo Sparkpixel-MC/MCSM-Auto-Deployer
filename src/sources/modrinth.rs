@@ -94,6 +94,7 @@ pub async fn resolve(
                 )),
                 published_at: version.date_published.clone(),
                 asset_name: file.filename.clone(),
+                url_download: Some(file.url.clone()),
                 download_url: file.url.clone(),
                 size: file.size,
                 expected_sha256: None,

@@ -77,6 +77,33 @@ pub struct DeleteFilesRequest {
     pub targets: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct UrlDownloadRequest<'a> {
+    pub url: &'a str,
+    pub file_name: &'a str,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FileStatusData {
+    #[serde(default)]
+    pub download_tasks: Vec<DownloadTaskInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadTaskInfo {
+    pub task_id: String,
+    pub path: String,
+    #[serde(default)]
+    pub total: u64,
+    #[serde(default)]
+    pub current: u64,
+    pub status: i64,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct UploadTarget {
     pub upload_dir: String,

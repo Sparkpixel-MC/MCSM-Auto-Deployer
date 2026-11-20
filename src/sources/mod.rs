@@ -28,7 +28,11 @@ pub struct ResolvedArtifact {
     pub release_url: Option<String>,
     pub published_at: Option<String>,
     pub asset_name: String,
+    /// URL used by this service for authenticated/local downloading.
     pub download_url: String,
+    /// Public URL that the MCSM daemon can fetch itself. None when the
+    /// provider only exposes an authenticated URL.
+    pub url_download: Option<String>,
     pub size: u64,
     pub expected_sha256: Option<String>,
     pub from_cache: bool,
@@ -111,6 +115,11 @@ impl SourceManager {
             release_url,
             published_at: selected.release.published_at.clone(),
             asset_name: selected.asset.name.clone(),
+            url_download: if selected.asset.browser_download_url.trim().is_empty() {
+                None
+            } else {
+                Some(selected.asset.browser_download_url.clone())
+            },
             download_url,
             size: selected.asset.size,
             expected_sha256: selected

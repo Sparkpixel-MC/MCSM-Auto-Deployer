@@ -138,6 +138,10 @@ pub struct McsmConfig {
     /// Number of attempts for panel operations that report a cooldown.
     #[serde(default = "default_api_retry_attempts")]
     pub api_retry_attempts: u32,
+    /// Files at or above this size use MCSM's URL download API instead of
+    /// streaming the body through the panel/daemon upload path. 0 disables it.
+    #[serde(default = "default_url_download_threshold_mb")]
+    pub url_download_threshold_mb: u64,
 }
 
 impl Default for McsmConfig {
@@ -151,6 +155,7 @@ impl Default for McsmConfig {
             accept_invalid_certs: false,
             api_min_interval_ms: default_api_min_interval_ms(),
             api_retry_attempts: default_api_retry_attempts(),
+            url_download_threshold_mb: default_url_download_threshold_mb(),
         }
     }
 }
@@ -161,6 +166,10 @@ fn default_api_min_interval_ms() -> u64 {
 
 fn default_api_retry_attempts() -> u32 {
     4
+}
+
+fn default_url_download_threshold_mb() -> u64 {
+    8
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,6 +393,7 @@ impl Config {
             .map(|value| value.trim_end_matches("://").to_ascii_lowercase());
         self.mcsm.api_min_interval_ms = self.mcsm.api_min_interval_ms.min(5_000);
         self.mcsm.api_retry_attempts = self.mcsm.api_retry_attempts.clamp(1, 10);
+        self.mcsm.url_download_threshold_mb = self.mcsm.url_download_threshold_mb.min(4_096);
 
         self.github.api_base = self
             .github

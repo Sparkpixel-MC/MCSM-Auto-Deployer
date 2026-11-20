@@ -6,6 +6,7 @@
     downloading: true,
     verifying: true,
     cleaning: true,
+    url_downloading: true,
     uploading: true,
     restarting: true
   };
@@ -16,6 +17,7 @@
     downloading: { label: '下载中', tone: 'busy' },
     verifying: { label: '校验中', tone: 'busy' },
     cleaning: { label: '清理旧版', tone: 'busy' },
+    url_downloading: { label: 'URL 下载中', tone: 'busy' },
     uploading: { label: '上传中', tone: 'busy' },
     restarting: { label: '重启中', tone: 'busy' },
     up_to_date: { label: '已是最新', tone: 'ok' },
@@ -165,6 +167,7 @@
     els.settingsTimeout = document.getElementById('settingsTimeout');
     els.settingsApiInterval = document.getElementById('settingsApiInterval');
     els.settingsApiRetries = document.getElementById('settingsApiRetries');
+    els.settingsUrlThreshold = document.getElementById('settingsUrlThreshold');
     els.settingsRestartMode = document.getElementById('settingsRestartMode');
     els.settingsInsecure = document.getElementById('settingsInsecure');
     els.settingsGithubToken = document.getElementById('settingsGithubToken');
@@ -614,7 +617,7 @@
     if (phase === 'downloading' || phase === 'verifying') {
       return { done: 1, active: 1 };
     }
-    if (phase === 'cleaning' || phase === 'uploading') {
+    if (phase === 'cleaning' || phase === 'url_downloading' || phase === 'uploading') {
       return { done: 2, active: 2 };
     }
     if (phase === 'restarting') {
@@ -643,6 +646,16 @@
       return '<div class="card-progress">'
         + '<div class="progress-meta"><span>下载资产 · ' + esc(downloaded) + ' / ' + esc(total) + '</span><span>' + (indeterminate ? '进行中' : Math.round(percent) + '%') + '</span></div>'
         + '<div class="linear-progress' + (indeterminate ? ' is-indeterminate' : '') + '"><span style="width:' + Math.max(0, Math.min(100, percent)) + '%"></span></div>'
+        + '</div>';
+    }
+    if (phase === 'url_downloading') {
+      var urlPercent = progress && typeof progress.percent === 'number' ? progress.percent : 0;
+      var urlTotal = progress && progress.total ? formatBytes(progress.total) : '未知大小';
+      var urlDownloaded = progress ? formatBytes(progress.downloaded) : '0 B';
+      var urlIndeterminate = !progress || !progress.total;
+      return '<div class="card-progress">'
+        + '<div class="progress-meta"><span>Daemon 正在从来源下载 · ' + esc(urlDownloaded) + ' / ' + esc(urlTotal) + '</span><span>' + (urlIndeterminate ? '进行中' : Math.round(urlPercent) + '%') + '</span></div>'
+        + '<div class="linear-progress' + (urlIndeterminate ? ' is-indeterminate' : '') + '"><span style="width:' + Math.max(0, Math.min(100, urlPercent)) + '%"></span></div>'
         + '</div>';
     }
     if (phase === 'uploading') {
@@ -1536,6 +1549,7 @@
     els.settingsTimeout.value = String(config.mcsm.timeout_secs);
     els.settingsApiInterval.value = String(config.mcsm.api_min_interval_ms == null ? 800 : config.mcsm.api_min_interval_ms);
     els.settingsApiRetries.value = String(config.mcsm.api_retry_attempts == null ? 4 : config.mcsm.api_retry_attempts);
+    els.settingsUrlThreshold.value = String(config.mcsm.url_download_threshold_mb == null ? 8 : config.mcsm.url_download_threshold_mb);
     els.settingsRestartMode.value = config.mcsm.restart_mode || 'restart';
     els.settingsInsecure.checked = Boolean(config.mcsm.accept_invalid_certs);
     els.settingsGithubToken.value = '';
@@ -1569,6 +1583,7 @@
     var timeout = Number(els.settingsTimeout.value);
     var apiInterval = Number(els.settingsApiInterval.value);
     var apiRetries = Number(els.settingsApiRetries.value);
+    var urlThreshold = Number(els.settingsUrlThreshold.value);
     var baseUrl = els.settingsBaseUrl.value.trim();
     var githubApi = els.settingsGithubApi.value.trim();
 
@@ -1587,6 +1602,10 @@
     var apiRetriesOk = Number.isInteger(apiRetries) && apiRetries >= 1 && apiRetries <= 10;
     markField('field-settings-api-retries', !apiRetriesOk);
     valid = apiRetriesOk && valid;
+
+    var urlThresholdOk = Number.isInteger(urlThreshold) && urlThreshold >= 0 && urlThreshold <= 4096;
+    markField('field-settings-url-threshold', !urlThresholdOk);
+    valid = urlThresholdOk && valid;
 
     var baseUrlOk = isValidHttpUrl(baseUrl);
     markField('field-settings-baseurl', !baseUrlOk);
@@ -1617,7 +1636,8 @@
         daemon_scheme: els.settingsDaemonScheme.value || null,
         accept_invalid_certs: els.settingsInsecure.checked,
         api_min_interval_ms: apiInterval,
-        api_retry_attempts: apiRetries
+        api_retry_attempts: apiRetries,
+        url_download_threshold_mb: urlThreshold
       },
       github: {
         api_base: githubApi,
@@ -1669,7 +1689,8 @@
         daemon_scheme: config.mcsm.daemon_scheme || null,
         accept_invalid_certs: Boolean(config.mcsm.accept_invalid_certs),
         api_min_interval_ms: config.mcsm.api_min_interval_ms == null ? 800 : config.mcsm.api_min_interval_ms,
-        api_retry_attempts: config.mcsm.api_retry_attempts == null ? 4 : config.mcsm.api_retry_attempts
+        api_retry_attempts: config.mcsm.api_retry_attempts == null ? 4 : config.mcsm.api_retry_attempts,
+        url_download_threshold_mb: config.mcsm.url_download_threshold_mb == null ? 8 : config.mcsm.url_download_threshold_mb
       },
       github: {
         api_base: config.github.api_base,

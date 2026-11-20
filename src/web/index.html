@@ -2946,9 +2946,9 @@
             <span class="field-error">请输入 0–5000 之间的整数</span>
           </div>
           <div class="field" id="field-settings-api-retries">
-            <label class="field-label" for="settingsApiRetries">冷却重试次数</label>
+            <label class="field-label" for="settingsApiRetries">冷却 / 上传重试次数</label>
             <input class="field-input mono" id="settingsApiRetries" type="number" min="1" max="10" step="1">
-            <span class="field-hint">遇到 MCSM「此操作冷却中」时自动等待并重试</span>
+            <span class="field-hint">遇到 MCSM「此操作冷却中」或 Daemon 5xx 直传失败时自动重试</span>
             <span class="field-error">请输入 1–10 之间的整数</span>
           </div>
           <div class="switch-row">

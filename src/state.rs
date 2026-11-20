@@ -140,7 +140,7 @@ impl TaskRuntime {
         let detail = detail.into();
         self.current_detail = Some(detail.clone());
         if let Some(step) = self.steps.iter_mut().find(|step| step.key == key) {
-            if step.status != TaskStepStatus::Done {
+            if step.status != TaskStepStatus::Skipped {
                 step.status = TaskStepStatus::Active;
                 if step.started_at.is_none() {
                     step.started_at = Some(now_ms());

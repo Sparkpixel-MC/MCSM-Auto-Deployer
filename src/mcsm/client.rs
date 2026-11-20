@@ -538,6 +538,10 @@ impl McsmClient {
 
     /// Full upload flow: passport → direct daemon upload → optional atomic
     /// rename so a core target such as /server.jar receives the right name.
+    ///
+    /// A fresh passport is requested for every attempt because the daemon may
+    /// consume a password even when an upstream proxy returns 502 after
+    /// receiving a partial body.
     pub async fn upload_and_place(
         &self,
         task: &TaskConfig,
@@ -545,33 +549,91 @@ impl McsmClient {
         asset_name: &str,
     ) -> Result<UploadOutcome, McsmError> {
         let target = Self::resolve_target(task, asset_name)?;
-        let passport = self
-            .fetch_upload_passport(&target, &task.mcsm_daemon_id, &task.mcsm_instance_uuid)
-            .await?;
-        let upload_url = self.daemon_upload_url(&passport)?;
-        let bytes = self
-            .upload_bytes_to_daemon(&upload_url, local_path, &safe_file_name(asset_name)?)
-            .await?;
-        if target.needs_move {
-            tracing::info!(
-                from = %target.uploaded_path,
-                to = %target.final_path,
-                "重命名上传文件到任务目标路径"
-            );
-            self.move_file(
-                &task.mcsm_daemon_id,
-                &task.mcsm_instance_uuid,
-                &target.uploaded_path,
-                &target.final_path,
-            )
-            .await?;
+        let safe_name = safe_file_name(asset_name)?;
+        let attempts = self.api_retry_attempts.max(1);
+        let mut attempt = 1_u32;
+        loop {
+            let passport = match self
+                .fetch_upload_passport(&target, &task.mcsm_daemon_id, &task.mcsm_instance_uuid)
+                .await
+            {
+                Ok(passport) => passport,
+                Err(error) if attempt < attempts && is_retryable_upload_error(&error) => {
+                    let wait = upload_retry_delay(attempt);
+                    self.emit_retry(
+                        "credential",
+                        attempt,
+                        wait,
+                        format!(
+                            "申请上传凭证失败，{} ms 后重新申请（{attempt}/{attempts}）: {error}",
+                            wait.as_millis()
+                        ),
+                    );
+                    tracing::warn!(
+                        attempt,
+                        max_attempts = attempts,
+                        wait_ms = wait.as_millis(),
+                        error = %error,
+                        "申请上传凭证失败，稍后重试"
+                    );
+                    tokio::time::sleep(wait).await;
+                    attempt += 1;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
+            let upload_url = self.daemon_upload_url(&passport)?;
+            match self
+                .upload_bytes_to_daemon(&upload_url, local_path, &safe_name)
+                .await
+            {
+                Ok(bytes) => {
+                    if target.needs_move {
+                        tracing::info!(
+                            from = %target.uploaded_path,
+                            to = %target.final_path,
+                            "重命名上传文件到任务目标路径"
+                        );
+                        self.move_file(
+                            &task.mcsm_daemon_id,
+                            &task.mcsm_instance_uuid,
+                            &target.uploaded_path,
+                            &target.final_path,
+                        )
+                        .await?;
+                    }
+                    return Ok(UploadOutcome {
+                        upload_dir: target.upload_dir,
+                        uploaded_path: target.uploaded_path,
+                        final_path: target.final_path,
+                        bytes,
+                    });
+                }
+                Err(error) if attempt < attempts && is_retryable_upload_error(&error) => {
+                    let wait = upload_retry_delay(attempt);
+                    self.emit_retry(
+                        "daemon_upload",
+                        attempt,
+                        wait,
+                        format!(
+                            "Daemon 直传失败，{} ms 后重新申请凭证并重试（{attempt}/{attempts}）: {error}",
+                            wait.as_millis()
+                        ),
+                    );
+                    tracing::warn!(
+                        attempt,
+                        max_attempts = attempts,
+                        wait_ms = wait.as_millis(),
+                        error = %error,
+                        "Daemon 直传失败，将重新申请上传凭证并重试"
+                    );
+                    tokio::time::sleep(wait).await;
+                    attempt += 1;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
         }
-        Ok(UploadOutcome {
-            upload_dir: target.upload_dir,
-            uploaded_path: target.uploaded_path,
-            final_path: target.final_path,
-            bytes,
-        })
     }
 
     async fn instance_status(
@@ -778,6 +840,21 @@ async fn wait_for_panel_slot(interval: Duration) {
         }
     }
     *last = Some(Instant::now());
+}
+
+fn is_retryable_upload_error(error: &McsmError) -> bool {
+    match error {
+        McsmError::Upload { status, .. } => {
+            matches!(*status, 408 | 429 | 500 | 502 | 503 | 504)
+        }
+        McsmError::Network(error) => error.is_timeout() || error.is_connect() || error.is_request(),
+        _ => false,
+    }
+}
+
+fn upload_retry_delay(attempt: u32) -> Duration {
+    let exponent = attempt.saturating_sub(1).min(3);
+    Duration::from_millis(1_000_u64 << exponent)
 }
 
 fn cooldown_delay(error: &McsmError) -> Option<Duration> {
@@ -1003,6 +1080,136 @@ mod tests {
             }
             Err(error) => assert!(false, "wss URL failed: {error}"),
         }
+    }
+
+    #[test]
+    fn classifies_retryable_upload_failures() {
+        assert!(is_retryable_upload_error(&McsmError::Upload {
+            status: 502,
+            message: "piece at 8388608 failed on all targets".to_string(),
+        }));
+        assert!(is_retryable_upload_error(&McsmError::Upload {
+            status: 504,
+            message: "gateway timeout".to_string(),
+        }));
+        assert!(!is_retryable_upload_error(&McsmError::Upload {
+            status: 403,
+            message: "forbidden".to_string(),
+        }));
+        assert_eq!(upload_retry_delay(1), Duration::from_secs(1));
+        assert_eq!(upload_retry_delay(3), Duration::from_secs(4));
+    }
+
+    #[tokio::test]
+    async fn daemon_upload_retries_with_a_fresh_passport() {
+        use axum::{
+            extract::State,
+            response::{IntoResponse, Response},
+            routing::post,
+            Json, Router,
+        };
+        use serde_json::json;
+        use std::io::Write as _;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        #[derive(Clone)]
+        struct MockState {
+            addr: String,
+            passports: Arc<AtomicUsize>,
+            uploads: Arc<AtomicUsize>,
+        }
+
+        async fn passport(State(state): State<MockState>) -> Json<Value> {
+            let number = state.passports.fetch_add(1, Ordering::SeqCst) + 1;
+            Json(json!({
+                "status": 200,
+                "data": {
+                    "password": format!("p{number}"),
+                    "addr": format!("http://{}", state.addr)
+                }
+            }))
+        }
+
+        async fn upload(State(state): State<MockState>, _body: axum::body::Bytes) -> Response {
+            let number = state.uploads.fetch_add(1, Ordering::SeqCst) + 1;
+            if number == 1 {
+                (
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    "piece at 8388608 failed on all targets",
+                )
+                    .into_response()
+            } else {
+                Json(json!({ "status": 200 })).into_response()
+            }
+        }
+
+        let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(error) => {
+                assert!(false, "bind upload mock failed: {error}");
+                return;
+            }
+        };
+        let address = match listener.local_addr() {
+            Ok(address) => address,
+            Err(error) => {
+                assert!(false, "mock address failed: {error}");
+                return;
+            }
+        };
+        let state = MockState {
+            addr: address.to_string(),
+            passports: Arc::new(AtomicUsize::new(0)),
+            uploads: Arc::new(AtomicUsize::new(0)),
+        };
+        let passport_count = Arc::clone(&state.passports);
+        let upload_count = Arc::clone(&state.uploads);
+        let app = Router::new()
+            .route("/api/files/upload", post(passport))
+            .route("/upload/{password}", post(upload))
+            .with_state(state);
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let mut config = test_config();
+        config.base_url = format!("http://{address}");
+        config.api_min_interval_ms = 0;
+        config.api_retry_attempts = 3;
+        let client = match McsmClient::new(&config) {
+            Ok(client) => client,
+            Err(error) => {
+                assert!(false, "test client construction failed: {error}");
+                return;
+            }
+        };
+        let mut temp = match tempfile::NamedTempFile::new() {
+            Ok(file) => file,
+            Err(error) => {
+                assert!(false, "temp file failed: {error}");
+                return;
+            }
+        };
+        if let Err(error) = temp.write_all(b"test artifact") {
+            assert!(false, "temp write failed: {error}");
+            return;
+        }
+        if let Err(error) = temp.flush() {
+            assert!(false, "temp flush failed: {error}");
+            return;
+        }
+        let task = TaskConfig {
+            mcsm_daemon_id: "daemon".to_string(),
+            mcsm_instance_uuid: "instance".to_string(),
+            mcsm_target_path: "/plugins/".to_string(),
+            ..TaskConfig::default()
+        };
+        let result = client
+            .upload_and_place(&task, temp.path(), "retry-test.jar")
+            .await;
+        assert!(result.is_ok(), "upload retry should succeed: {result:?}");
+        assert_eq!(passport_count.load(Ordering::SeqCst), 2);
+        assert_eq!(upload_count.load(Ordering::SeqCst), 2);
     }
 
     #[test]

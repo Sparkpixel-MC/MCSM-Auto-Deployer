@@ -14,6 +14,7 @@
 - 流式下载 + 边下边算 SHA-256；GitHub Release 提供 `digest` 时会交叉校验。
 - **MCSM 两步上传**：面板只签发一次性凭证，文件字节直传 Daemon，不经过面板 API。
 - **MCSM API 节流与冷却重试**：面板调用共享最小间隔，遇到「此操作冷却中」会自动等待并重试；避免上传末尾的 `api/files/move` 偶发失败。
+- **Daemon 直传重试**：遇到上传 408/429/5xx 或连接超时时，会等待后重新申请全新上传凭证并重传，避免 `piece at ... failed on all targets` 这类 502 直接终止部署。
 - **部署过程可视化**：每张任务卡可打开过程对话框，查看检查、下载、校验、清理、凭证、直传、重命名、重启的实时状态、耗时和 API 重试次数。
 - 文件目标自动重命名：例如上传 `lophine-0.9.2.jar` 后移动为 `/server.jar`。
 - 目录目标保留资产原名：`/plugins/`、`/mods/`。
@@ -345,7 +346,7 @@ restart_mode = "restart"         # restart | stop_then_open
 # daemon_scheme = "http"         # 面板 HTTPS、节点 HTTP 时显式指定
 accept_invalid_certs = false     # 仅自签名内网建议开启
 api_min_interval_ms = 800        # 面板 API 最小间隔；并发部署可调到 1000–1500
-api_retry_attempts = 4           # 「操作冷却中」时的总尝试次数（1–10）
+api_retry_attempts = 4           # 冷却 / Daemon 5xx 上传的总尝试次数（1–10）
 
 [github]
 token = ""                       # 可留空；建议配置 PAT 提高限额
@@ -509,6 +510,8 @@ file=@artifact.jar
 文件字节**绝不**提交到面板的 `/api/files/upload`。
 
 > **MCSM 操作冷却**：面板对文件移动/删除等操作有独立限速。程序会在所有面板 API 之间强制 `api_min_interval_ms` 间隔；若仍收到「此操作冷却中，约 N 秒后可继续操作」，会解析 N 秒并自动重试（`api_retry_attempts`），日志和任务「过程」对话框会显示等待与重试次数。
+
+> **Daemon 直传重试**：若 `/upload/{password}` 返回 502（例如 `piece at 8388608 failed on all targets`）、503、504、429、408 或连接超时，程序会按指数退避重新申请上传凭证并重传。每次重试都使用新凭证，避免一次性密码失效；401/403/404 等确定性错误不会重试。
 
 > MCSM 面板可能返回 `ws://` 或 `wss://` 形式的 Daemon 地址（Socket.IO 使用）。程序会按官方前端的转换逻辑将 `wss://` 转为 `https://`、`ws://` 转为 `http://`，再 POST 到 `/upload/{password}`；文件上传本身仍是 HTTP(S) multipart 请求。
 

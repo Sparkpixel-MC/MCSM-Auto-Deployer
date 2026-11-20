@@ -5,12 +5,14 @@ state_file = "data/state.json"
 log_history = 500
 
 [mcsm]
-base_url = "https://server-backend.mooire.top"
+base_url = "http://127.0.0.1:23333"
 api_key = "YOUR_MCSM_API_KEY"
 timeout_secs = 180
 restart_mode = "restart"
-daemon_scheme = "https"
+daemon_scheme = "http"
 accept_invalid_certs = false
+api_min_interval_ms = 800
+api_retry_attempts = 4
 
 [github]
 api_base = "https://api.github.com"
@@ -35,8 +37,8 @@ asset_regex = '^lophine-.*\.jar$'
 include_prerelease = false
 game_versions = []
 loaders = []
-mcsm_daemon_id = "85f05f4168334f3ca2269386100ed9eb"
-mcsm_instance_uuid = "3365e3b2fa8e441d82010c192f32aa7e"
+mcsm_daemon_id = "YOUR_DAEMON_UUID"
+mcsm_instance_uuid = "YOUR_INSTANCE_UUID"
 mcsm_target_path = "/server.jar"
 restart = true
 cleanup_old = false

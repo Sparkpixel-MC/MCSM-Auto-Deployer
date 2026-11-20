@@ -131,6 +131,13 @@ pub struct McsmConfig {
     /// daemon is reached over plain HTTP on a private network.
     pub daemon_scheme: Option<String>,
     pub accept_invalid_certs: bool,
+    /// Minimum spacing between MCSM panel API calls. This reduces collisions
+    /// with the panel's per-operation cooldown limits.
+    #[serde(default = "default_api_min_interval_ms")]
+    pub api_min_interval_ms: u64,
+    /// Number of attempts for panel operations that report a cooldown.
+    #[serde(default = "default_api_retry_attempts")]
+    pub api_retry_attempts: u32,
 }
 
 impl Default for McsmConfig {
@@ -142,8 +149,18 @@ impl Default for McsmConfig {
             restart_mode: RestartMode::Restart,
             daemon_scheme: None,
             accept_invalid_certs: false,
+            api_min_interval_ms: default_api_min_interval_ms(),
+            api_retry_attempts: default_api_retry_attempts(),
         }
     }
+}
+
+fn default_api_min_interval_ms() -> u64 {
+    800
+}
+
+fn default_api_retry_attempts() -> u32 {
+    4
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -365,6 +382,8 @@ impl Config {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(|value| value.trim_end_matches("://").to_ascii_lowercase());
+        self.mcsm.api_min_interval_ms = self.mcsm.api_min_interval_ms.min(5_000);
+        self.mcsm.api_retry_attempts = self.mcsm.api_retry_attempts.clamp(1, 10);
 
         self.github.api_base = self
             .github

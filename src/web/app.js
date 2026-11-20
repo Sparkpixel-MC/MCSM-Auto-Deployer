@@ -53,6 +53,7 @@
     pendingBatch: false,
     batchSeenActive: false,
     batchStarted: 0,
+    processTaskId: null,
     restarts: [],
     statusLoading: false,
     statusErrorNotified: false,
@@ -119,6 +120,13 @@
     els.snackbarText = document.getElementById('snackbarText');
     els.snackbarAction = document.getElementById('snackbarAction');
     els.snackbarClose = document.getElementById('snackbarClose');
+    els.processDialog = document.getElementById('processDialog');
+    els.processSubtitle = document.getElementById('processSubtitle');
+    els.processCurrent = document.getElementById('processCurrent');
+    els.processCurrentText = document.getElementById('processCurrentText');
+    els.processRetryChip = document.getElementById('processRetryChip');
+    els.processMeta = document.getElementById('processMeta');
+    els.processTimeline = document.getElementById('processTimeline');
     els.taskDialog = document.getElementById('taskDialog');
     els.taskDialogTitle = document.getElementById('taskDialogTitle');
     els.taskForm = document.getElementById('taskForm');
@@ -155,6 +163,8 @@
     els.apiKeyHint = document.getElementById('apiKeyHint');
     els.settingsDaemonScheme = document.getElementById('settingsDaemonScheme');
     els.settingsTimeout = document.getElementById('settingsTimeout');
+    els.settingsApiInterval = document.getElementById('settingsApiInterval');
+    els.settingsApiRetries = document.getElementById('settingsApiRetries');
     els.settingsRestartMode = document.getElementById('settingsRestartMode');
     els.settingsInsecure = document.getElementById('settingsInsecure');
     els.settingsGithubToken = document.getElementById('settingsGithubToken');
@@ -313,6 +323,9 @@
       reconcilePending();
       renderSystem();
       renderTasks();
+      if (els.processDialog.open) {
+        renderProcessDialog();
+      }
       renderRestartBadge();
       if (els.batchDialog.open) {
         renderRestartList();
@@ -516,6 +529,7 @@
     var currentIsEmpty = !task.current_version;
     var latestIsEmpty = !task.latest_version;
     var assetName = task.latest_asset ? esc(task.latest_asset) : '等待首次来源检查';
+    var assetLabel = busy && task.current_detail ? esc(task.current_detail) : assetName;
     var footnote = task.current_version && task.last_updated_at
       ? '部署于 ' + formatRelative(task.last_updated_at)
       : (task.last_checked_at ? '检查于 ' + formatRelative(task.last_checked_at) : '尚未检查');
@@ -560,12 +574,13 @@
       +   '<div class="version-cell"><span class="version-label">最新版本</span><span class="version-value ' + (latestIsEmpty ? 'is-empty' : 'is-latest') + '" title="' + latestVersion + '">' + latestVersion + '</span></div>'
       + '</div>'
       + pipelineHtml(task)
-      + '<div class="asset-row" title="' + assetName + '">' + icon('package', 'icon-sm') + '<code>' + assetName + '</code></div>'
+      + '<div class="asset-row" title="' + esc(task.current_detail || task.latest_asset || '') + '">' + icon(busy ? 'activity' : 'package', 'icon-sm') + '<code>' + assetLabel + '</code></div>'
       + progress
       + error
       + '<div class="card-footer">'
       +   '<span class="card-footnote">' + (task.enabled ? footnote : '通道已停用') + '</span>'
       +   '<div class="card-actions">'
+      +     '<button type="button" class="icon-btn" data-action="process" data-id="' + esc(task.id) + '" title="查看部署过程" aria-label="查看部署过程">' + icon('activity', 'icon-sm') + '</button>'
       +     '<button type="button" class="icon-btn" data-action="check" data-id="' + esc(task.id) + '" title="立即检查" aria-label="立即检查"' + actionDisabled + '>' + icon('refresh', 'icon-sm') + '</button>'
       +     '<button type="button" class="m3-btn m3-btn-filled" data-action="update" data-id="' + esc(task.id) + '"' + actionDisabled + '>' + spinner + '<span>' + (busy && !ACTIVE_PHASES[phase] ? '处理中' : '立即更新') + '</span></button>'
       +     '<button type="button" class="m3-btn m3-btn-text" data-action="edit" data-id="' + esc(task.id) + '">编辑</button>'
@@ -648,6 +663,9 @@
     }
     if (task.restart_deferred && task.phase === 'success') {
       return { label: '待统一重启', tone: 'update' };
+    }
+    if (busy && task.retry_count > 0) {
+      return { label: '重试中', tone: 'update' };
     }
     if (busy && !ACTIVE_PHASES[task.phase]) {
       return { label: '处理中', tone: 'busy' };
@@ -736,9 +754,94 @@
       openTaskDialog(id);
       return;
     }
+    if (action === 'process') {
+      openProcessDialog(id);
+      return;
+    }
     if (action === 'check' || action === 'update') {
       triggerTask(id, action);
     }
+  }
+
+
+  function openProcessDialog(id) {
+    var task = findTask(id);
+    if (!task) {
+      return;
+    }
+    store.processTaskId = id;
+    renderProcessDialog();
+    els.processDialog.showModal();
+  }
+
+  function renderProcessDialog() {
+    var task = findTask(store.processTaskId);
+    if (!task) {
+      return;
+    }
+    els.processSubtitle.textContent = task.name + ' · ' + (task.mcsm_target_path || '未配置目标路径');
+    els.processCurrentText.textContent = task.current_detail
+      || (task.last_error ? '最近错误：' + task.last_error : '等待开始部署');
+    var retries = Number(task.retry_count) || 0;
+    if (retries > 0) {
+      els.processRetryChip.style.display = '';
+      els.processRetryChip.textContent = retries + ' 次冷却重试';
+    } else {
+      els.processRetryChip.style.display = 'none';
+    }
+
+    var meta = [];
+    meta.push('<span>阶段：' + esc(statusMeta(task, isTaskBusy(task)).label) + '</span>');
+    if (task.current_version || task.latest_version) {
+      meta.push('<span>版本：' + esc(task.current_version || '未部署') + ' → ' + esc(task.latest_version || '—') + '</span>');
+    }
+    if (task.last_updated_at) {
+      meta.push('<span>上次部署：' + esc(formatRelative(task.last_updated_at)) + '</span>');
+    }
+    if (task.restart_deferred) {
+      meta.push('<span>重启已交由统一队列</span>');
+    }
+    els.processMeta.innerHTML = meta.join('');
+
+    var steps = task.steps || [];
+    if (!steps.length) {
+      els.processTimeline.innerHTML = '<li class="process-empty">尚未执行部署。点击「立即更新」后，这里会显示内部步骤。</li>';
+      return;
+    }
+    var html = '';
+    for (var index = 0; index < steps.length; index += 1) {
+      var step = steps[index];
+      var status = step.status || 'pending';
+      var marker;
+      if (status === 'active') {
+        marker = '<span class="loading loading-spinner" style="width:13px;height:13px;border-width:1.5px"></span>';
+      } else {
+        var markerIcon = status === 'done' ? 'check' : (status === 'failed' ? 'alert' : (status === 'skipped' ? 'info' : 'clock'));
+        marker = icon(markerIcon, 'icon-sm');
+      }
+      var started = step.started_at ? formatTime(step.started_at) : '';
+      var finished = step.finished_at ? formatTime(step.finished_at) : '';
+      var metaLine = '';
+      if (started) {
+        metaLine = started + (finished ? ' → ' + finished : ' · 进行中');
+      }
+      if (step.started_at && step.finished_at) {
+        var duration = Math.max(0, step.finished_at - step.started_at);
+        metaLine += ' · ' + (duration < 1000 ? '&lt;1s' : Math.round(duration / 1000) + 's');
+      }
+      var attempts = Number(step.attempts) || 0;
+      html += '<li class="process-step is-' + esc(status) + '">'
+        + '<span class="process-marker">' + marker + '</span>'
+        + '<div>'
+        +   '<div class="process-step-title"><span>' + esc(step.label || step.key) + '</span>'
+        +     (attempts > 0 ? '<span class="process-attempts">重试 ' + attempts + ' 次</span>' : '')
+        +   '</div>'
+        +   '<p class="process-step-detail">' + esc(step.detail || (status === 'pending' ? '等待执行' : '')) + '</p>'
+        +   (metaLine ? '<div class="process-step-meta">' + metaLine + '</div>' : '')
+        + '</div>'
+        + '</li>';
+    }
+    els.processTimeline.innerHTML = html;
   }
 
   async function triggerTask(id, action) {
@@ -1431,6 +1534,8 @@
     els.settingsApiKey.value = '';
     els.settingsDaemonScheme.value = config.mcsm.daemon_scheme || '';
     els.settingsTimeout.value = String(config.mcsm.timeout_secs);
+    els.settingsApiInterval.value = String(config.mcsm.api_min_interval_ms == null ? 800 : config.mcsm.api_min_interval_ms);
+    els.settingsApiRetries.value = String(config.mcsm.api_retry_attempts == null ? 4 : config.mcsm.api_retry_attempts);
     els.settingsRestartMode.value = config.mcsm.restart_mode || 'restart';
     els.settingsInsecure.checked = Boolean(config.mcsm.accept_invalid_certs);
     els.settingsGithubToken.value = '';
@@ -1462,6 +1567,8 @@
     var valid = true;
     var interval = Number(els.settingsInterval.value);
     var timeout = Number(els.settingsTimeout.value);
+    var apiInterval = Number(els.settingsApiInterval.value);
+    var apiRetries = Number(els.settingsApiRetries.value);
     var baseUrl = els.settingsBaseUrl.value.trim();
     var githubApi = els.settingsGithubApi.value.trim();
 
@@ -1472,6 +1579,14 @@
     var timeoutOk = Number.isInteger(timeout) && timeout >= 10 && timeout <= 1800;
     markField('field-settings-timeout', !timeoutOk);
     valid = timeoutOk && valid;
+
+    var apiIntervalOk = Number.isInteger(apiInterval) && apiInterval >= 0 && apiInterval <= 5000;
+    markField('field-settings-api-interval', !apiIntervalOk);
+    valid = apiIntervalOk && valid;
+
+    var apiRetriesOk = Number.isInteger(apiRetries) && apiRetries >= 1 && apiRetries <= 10;
+    markField('field-settings-api-retries', !apiRetriesOk);
+    valid = apiRetriesOk && valid;
 
     var baseUrlOk = isValidHttpUrl(baseUrl);
     markField('field-settings-baseurl', !baseUrlOk);
@@ -1500,7 +1615,9 @@
         timeout_secs: timeout,
         restart_mode: els.settingsRestartMode.value,
         daemon_scheme: els.settingsDaemonScheme.value || null,
-        accept_invalid_certs: els.settingsInsecure.checked
+        accept_invalid_certs: els.settingsInsecure.checked,
+        api_min_interval_ms: apiInterval,
+        api_retry_attempts: apiRetries
       },
       github: {
         api_base: githubApi,
@@ -1550,7 +1667,9 @@
         timeout_secs: config.mcsm.timeout_secs,
         restart_mode: config.mcsm.restart_mode,
         daemon_scheme: config.mcsm.daemon_scheme || null,
-        accept_invalid_certs: Boolean(config.mcsm.accept_invalid_certs)
+        accept_invalid_certs: Boolean(config.mcsm.accept_invalid_certs),
+        api_min_interval_ms: config.mcsm.api_min_interval_ms == null ? 800 : config.mcsm.api_min_interval_ms,
+        api_retry_attempts: config.mcsm.api_retry_attempts == null ? 4 : config.mcsm.api_retry_attempts
       },
       github: {
         api_base: config.github.api_base,

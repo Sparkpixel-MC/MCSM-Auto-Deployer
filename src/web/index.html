@@ -1118,6 +1118,8 @@
     }
 
     .asset-row code {
+      min-width: 0;
+      flex: 1;
       font-family: var(--md-font-mono);
       font-size: 10px;
       color: var(--md-on-surface-variant);
@@ -1638,6 +1640,156 @@
 
     .snackbar-close:hover { opacity: 1; background: color-mix(in srgb, var(--md-inverse-on-surface) 8%, transparent); }
     .snackbar-close .icon { width: 16px; height: 16px; }
+
+    /* =====================================================================
+       Deployment process dialog
+       ===================================================================== */
+    .process-current {
+      padding: 14px 16px;
+      border: 1px solid var(--md-outline-variant);
+      border-radius: var(--md-shape-card);
+      background: var(--md-surface-container);
+    }
+
+    .process-current-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .process-current-label {
+      color: var(--md-primary);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .process-current-text {
+      margin: 0;
+      color: var(--md-on-surface);
+      font-size: 12px;
+      line-height: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    .process-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--md-on-surface-variant);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .process-meta span {
+      padding: 4px 9px;
+      border-radius: 12px;
+      background: var(--md-surface-container-low);
+    }
+
+    .process-timeline {
+      list-style: none;
+      margin: 0;
+      padding: 2px 0 0;
+    }
+
+    .process-step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
+      gap: 12px;
+      padding-bottom: 18px;
+    }
+
+    .process-step:not(:last-child)::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 27px;
+      bottom: 0;
+      width: 1px;
+      background: var(--md-outline-variant);
+    }
+
+    .process-marker {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--md-outline-variant);
+      border-radius: 50%;
+      background: var(--md-surface-container-low);
+      color: var(--md-outline);
+      position: relative;
+      z-index: 1;
+    }
+
+    .process-marker .icon { width: 14px; height: 14px; }
+
+    .process-step.is-active .process-marker {
+      border-color: var(--md-primary);
+      background: var(--md-primary-container);
+      color: var(--md-on-primary-container);
+    }
+
+    .process-step.is-done .process-marker {
+      border-color: color-mix(in srgb, var(--md-ok) 45%, transparent);
+      background: color-mix(in srgb, var(--md-ok) 16%, transparent);
+      color: var(--md-ok);
+    }
+
+    .process-step.is-failed .process-marker {
+      border-color: color-mix(in srgb, var(--md-error) 50%, transparent);
+      background: color-mix(in srgb, var(--md-error) 16%, transparent);
+      color: var(--md-error);
+    }
+
+    .process-step.is-skipped { opacity: 0.56; }
+    .process-step.is-pending { opacity: 0.66; }
+
+    .process-step-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--md-on-surface);
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 18px;
+    }
+
+    .process-step-title .process-attempts {
+      color: var(--md-warning);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .process-step-detail {
+      margin: 3px 0 0;
+      color: var(--md-on-surface-variant);
+      font-size: 11px;
+      line-height: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    .process-step-meta {
+      margin-top: 4px;
+      color: var(--md-outline);
+      font-size: 9.5px;
+      line-height: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .process-empty {
+      margin: 0;
+      padding: 24px 0;
+      color: var(--md-outline);
+      font-size: 12px;
+      text-align: center;
+    }
 
     /* =====================================================================
        Dialogs and forms
@@ -2323,6 +2475,7 @@
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7ZM5 18v2h14v-2H5Z"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4v6ZM5 18v2h14v-2H5Z"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7Z"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 13h4l2.5-8 4.8 14L17 11h4v2h-2.6l-3 8h-2L8.6 7 7 15H3v-2Z"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21Z"/></symbol>
     <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.8 18 5.1 18 5.1c.6 1.6.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3Z"/></symbol>
     <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8Z"/></symbol>
@@ -2627,6 +2780,35 @@
     </form>
   </dialog>
 
+  <dialog class="m3-dialog" id="processDialog" aria-labelledby="processDialogTitle">
+    <div class="dialog-header">
+      <div>
+        <p class="dialog-eyebrow">DEPLOYMENT TRACE</p>
+        <h2 class="dialog-title" id="processDialogTitle">部署过程</h2>
+        <p class="dialog-subtitle" id="processSubtitle">查看当前任务的内部执行步骤与 MCSM API 重试记录。</p>
+      </div>
+      <button type="button" class="icon-btn" data-close-dialog="processDialog" aria-label="关闭部署过程">
+        <svg class="icon"><use href="#i-close"></use></svg>
+      </button>
+    </div>
+    <div class="dialog-body">
+      <div class="process-current" id="processCurrent">
+        <div class="process-current-head">
+          <span class="process-current-label">当前动作</span>
+          <span class="type-chip type-other" id="processRetryChip" style="display:none">0 次重试</span>
+        </div>
+        <p class="process-current-text" id="processCurrentText">尚未开始部署</p>
+      </div>
+      <div class="process-meta" id="processMeta"></div>
+      <ol class="process-timeline" id="processTimeline"></ol>
+    </div>
+    <div class="dialog-footer">
+      <div class="footer-actions">
+        <button type="button" class="m3-btn m3-btn-text" data-close-dialog="processDialog">关闭</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="m3-dialog" id="batchDialog" aria-labelledby="batchDialogTitle">
     <form class="dialog-form" id="batchForm" novalidate>
       <div class="dialog-header">
@@ -2756,6 +2938,18 @@
             <label class="field-label" for="settingsTimeout">请求超时（秒）</label>
             <input class="field-input mono" id="settingsTimeout" type="number" min="10" max="1800" step="10">
             <span class="field-error">请输入 10–1800 之间的整数</span>
+          </div>
+          <div class="field" id="field-settings-api-interval">
+            <label class="field-label" for="settingsApiInterval">API 操作间隔（毫秒）</label>
+            <input class="field-input mono" id="settingsApiInterval" type="number" min="0" max="5000" step="50">
+            <span class="field-hint">所有面板 API 的最小间隔，默认 800 ms；并发部署时建议 1000–1500 ms</span>
+            <span class="field-error">请输入 0–5000 之间的整数</span>
+          </div>
+          <div class="field" id="field-settings-api-retries">
+            <label class="field-label" for="settingsApiRetries">冷却重试次数</label>
+            <input class="field-input mono" id="settingsApiRetries" type="number" min="1" max="10" step="1">
+            <span class="field-hint">遇到 MCSM「此操作冷却中」时自动等待并重试</span>
+            <span class="field-error">请输入 1–10 之间的整数</span>
           </div>
           <div class="switch-row">
             <div class="switch-copy">

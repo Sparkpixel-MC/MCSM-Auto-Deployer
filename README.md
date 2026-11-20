@@ -13,6 +13,8 @@
 - 定时轮询；GitHub 支持 **ETag 条件请求**，避免浪费 Rate Limit。
 - 流式下载 + 边下边算 SHA-256；GitHub Release 提供 `digest` 时会交叉校验。
 - **MCSM 两步上传**：面板只签发一次性凭证，文件字节直传 Daemon，不经过面板 API。
+- **MCSM API 节流与冷却重试**：面板调用共享最小间隔，遇到「此操作冷却中」会自动等待并重试；避免上传末尾的 `api/files/move` 偶发失败。
+- **部署过程可视化**：每张任务卡可打开过程对话框，查看检查、下载、校验、清理、凭证、直传、重命名、重启的实时状态、耗时和 API 重试次数。
 - 文件目标自动重命名：例如上传 `lophine-0.9.2.jar` 后移动为 `/server.jar`。
 - 目录目标保留资产原名：`/plugins/`、`/mods/`。
 - **上传前清理旧版**：支持按目标目录远程文件名正则清理，即使旧文件被手动重命名也能匹配；未配置正则时回退到本地记录的部署路径。
@@ -32,9 +34,10 @@
 - 检查、下载、校验、旧版清理、上传、重启各阶段状态
 - 当前资产名、执行错误或下载进度
 - 待统一重启标记
-- 「立即检查」「立即更新」「编辑」操作
+- 当前内部动作（申请凭证、直传 Daemon、冷却重试、重命名等）
+- 「立即检查」「立即更新」「过程」「编辑」操作
 
-顶部「批量部署」对话框可选择多个任务、指定统一重启时间，并管理/取消已登记的重启计划。设置对话框可以修改轮询间隔、MCSM 面板地址、API Key、Daemon 协议、重启策略、GitHub Token、CurseForge API Key 等。已配置的密钥不会下发到浏览器；留空提交表示保持原密钥。
+顶部「批量部署」对话框可选择多个任务、指定统一重启时间，并管理/取消已登记的重启计划。每张任务卡的「过程」按钮会打开部署时间线，展示内部步骤、当前动作、耗时、重试次数与失败原因。设置对话框可以修改轮询间隔、MCSM 面板地址、API Key、Daemon 协议、API 操作间隔、冷却重试次数、重启策略、GitHub Token、CurseForge API Key 等。已配置的密钥不会下发到浏览器；留空提交表示保持原密钥。
 
 ## 架构
 
@@ -341,6 +344,8 @@ timeout_secs = 180
 restart_mode = "restart"         # restart | stop_then_open
 # daemon_scheme = "http"         # 面板 HTTPS、节点 HTTP 时显式指定
 accept_invalid_certs = false     # 仅自签名内网建议开启
+api_min_interval_ms = 800        # 面板 API 最小间隔；并发部署可调到 1000–1500
+api_retry_attempts = 4           # 「操作冷却中」时的总尝试次数（1–10）
 
 [github]
 token = ""                       # 可留空；建议配置 PAT 提高限额
@@ -503,6 +508,8 @@ file=@artifact.jar
 
 文件字节**绝不**提交到面板的 `/api/files/upload`。
 
+> **MCSM 操作冷却**：面板对文件移动/删除等操作有独立限速。程序会在所有面板 API 之间强制 `api_min_interval_ms` 间隔；若仍收到「此操作冷却中，约 N 秒后可继续操作」，会解析 N 秒并自动重试（`api_retry_attempts`），日志和任务「过程」对话框会显示等待与重试次数。
+
 > MCSM 面板可能返回 `ws://` 或 `wss://` 形式的 Daemon 地址（Socket.IO 使用）。程序会按官方前端的转换逻辑将 `wss://` 转为 `https://`、`ws://` 转为 `http://`，再 POST 到 `/upload/{password}`；文件上传本身仍是 HTTP(S) multipart 请求。
 
 - **文件目标重命名**：上传后通过面板 `PUT /api/files/move` 将资产移动到目标路径，例如 `/lophine-0.9.2.jar` → `/server.jar`。该能力始终启用，不需要额外开关。
@@ -517,7 +524,8 @@ file=@artifact.jar
   - 只监听 `127.0.0.1`，通过 Nginx / Caddy 加 Basic Auth 或 SSO；
   - 防火墙限制 8080；
   - 不把面板 API Key 暴露给公网。
-- `config.toml` 含明文 MCSM API Key / GitHub Token，保持 `chmod 600`。
+- 仓库中的 `config.toml` 只保存占位示例；真实配置请放在 `config.local.toml`（已被 `.gitignore` 忽略），并保持 `chmod 600`。
+- 如果密钥曾经进入 Git 历史，必须立即在对应平台轮换，并用 `git filter-repo` / BFG 清理历史；仅删除当前文件或加入 `.gitignore` 不能撤回历史中的密钥。
 - Web UI 从不接收真实密钥；GET 配置时密钥永远为空。
 - 建议使用最小权限的 MCSM 子账号 API Key，只授予目标实例的文件/实例权限。
 - 开启 `accept_invalid_certs` 会关闭 TLS 校验，仅限自签名内网。

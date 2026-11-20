@@ -54,6 +54,42 @@ pub struct DownloadProgress {
     pub percent: f64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStepStatus {
+    #[default]
+    Pending,
+    Active,
+    Done,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskStep {
+    pub key: String,
+    pub label: String,
+    pub status: TaskStepStatus,
+    pub detail: Option<String>,
+    pub started_at: Option<u64>,
+    pub finished_at: Option<u64>,
+    pub attempts: u32,
+}
+
+impl TaskStep {
+    fn new(key: &str, label: &str) -> Self {
+        Self {
+            key: key.to_string(),
+            label: label.to_string(),
+            status: TaskStepStatus::Pending,
+            detail: None,
+            started_at: None,
+            finished_at: None,
+            attempts: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct TaskRuntime {
     pub phase: TaskPhase,
@@ -75,6 +111,110 @@ pub struct TaskRuntime {
     pub sha256: Option<String>,
     /// Set when a batch deployment intentionally deferred the instance restart.
     pub restart_deferred: bool,
+    /// Human-readable text for the currently executing sub-operation.
+    pub current_detail: Option<String>,
+    /// Number of MCSM cooldown retries seen during the current deployment.
+    pub retry_count: u32,
+    /// Internal deployment timeline shown by the task process dialog.
+    pub steps: Vec<TaskStep>,
+}
+
+impl TaskRuntime {
+    /// Reset the timeline at the beginning of a deployment.
+    pub fn prepare_steps(&mut self) {
+        self.steps = vec![
+            TaskStep::new("check", "检查来源"),
+            TaskStep::new("download", "下载资产"),
+            TaskStep::new("verify", "SHA-256 校验"),
+            TaskStep::new("cleanup", "清理旧版"),
+            TaskStep::new("credential", "申请上传凭证"),
+            TaskStep::new("daemon_upload", "直传 Daemon"),
+            TaskStep::new("rename", "重命名文件"),
+            TaskStep::new("restart", "重启实例"),
+        ];
+        self.current_detail = Some("准备开始部署".to_string());
+        self.retry_count = 0;
+    }
+
+    pub fn start_step(&mut self, key: &str, detail: impl Into<String>) {
+        let detail = detail.into();
+        self.current_detail = Some(detail.clone());
+        if let Some(step) = self.steps.iter_mut().find(|step| step.key == key) {
+            if step.status != TaskStepStatus::Done {
+                step.status = TaskStepStatus::Active;
+                if step.started_at.is_none() {
+                    step.started_at = Some(now_ms());
+                }
+            }
+            step.detail = Some(detail);
+        }
+    }
+
+    pub fn finish_step(&mut self, key: &str, detail: impl Into<String>) {
+        let detail = detail.into();
+        self.current_detail = Some(detail.clone());
+        if let Some(step) = self.steps.iter_mut().find(|step| step.key == key) {
+            step.status = TaskStepStatus::Done;
+            if step.started_at.is_none() {
+                step.started_at = Some(now_ms());
+            }
+            step.finished_at = Some(now_ms());
+            step.detail = Some(detail);
+        }
+    }
+
+    pub fn fail_step(&mut self, key: &str, detail: impl Into<String>) {
+        let detail = detail.into();
+        self.current_detail = Some(detail.clone());
+        if let Some(step) = self.steps.iter_mut().find(|step| step.key == key) {
+            step.status = TaskStepStatus::Failed;
+            if step.started_at.is_none() {
+                step.started_at = Some(now_ms());
+            }
+            step.finished_at = Some(now_ms());
+            step.detail = Some(detail);
+        }
+    }
+
+    pub fn skip_step(&mut self, key: &str, detail: impl Into<String>) {
+        let detail = detail.into();
+        self.current_detail = Some(detail.clone());
+        if let Some(step) = self.steps.iter_mut().find(|step| step.key == key) {
+            step.status = TaskStepStatus::Skipped;
+            step.finished_at = Some(now_ms());
+            step.detail = Some(detail);
+        }
+    }
+
+    pub fn retry_step(&mut self, key: &str, detail: impl Into<String>, attempt: u32) {
+        let detail = detail.into();
+        self.current_detail = Some(detail.clone());
+        self.retry_count = self.retry_count.saturating_add(1);
+        if let Some(step) = self.steps.iter_mut().find(|step| step.key == key) {
+            if step.status == TaskStepStatus::Pending {
+                step.status = TaskStepStatus::Active;
+                step.started_at = Some(now_ms());
+            }
+            step.attempts = step.attempts.max(attempt);
+            step.detail = Some(detail);
+        }
+    }
+
+    /// Mark whichever step is currently active as failed. Used by the outer
+    /// error handler so a failure is always visible in the process timeline.
+    pub fn fail_active_step(&mut self, detail: impl Into<String>) {
+        let detail = detail.into();
+        self.current_detail = Some(detail.clone());
+        if let Some(step) = self
+            .steps
+            .iter_mut()
+            .find(|step| step.status == TaskStepStatus::Active)
+        {
+            step.status = TaskStepStatus::Failed;
+            step.finished_at = Some(now_ms());
+            step.detail = Some(detail);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

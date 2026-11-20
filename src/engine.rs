@@ -6,7 +6,7 @@
 
 use crate::config::{RestartMode, TaskConfig};
 use crate::logs::now_ms;
-use crate::mcsm::McsmClient;
+use crate::mcsm::{McsmClient, McsmEvent, McsmEventKind, McsmEventSink};
 use crate::sources::ResolvedArtifact;
 use crate::state::{AppState, DownloadProgress, TaskPhase};
 use anyhow::{anyhow, bail, Context, Result};
@@ -363,6 +363,7 @@ impl Engine {
                 runtime.phase = TaskPhase::Error;
                 runtime.last_error = Some(detail.clone());
                 runtime.progress = None;
+                runtime.fail_active_step(detail.clone());
             });
             tracing::error!(
                 task_id = %id,
@@ -372,6 +373,46 @@ impl Engine {
             );
         }
         result
+    }
+
+    /// Convert low-level MCSM client events into task runtime steps and SSE
+    /// log lines. The client never needs to know about AppState or task IDs.
+    fn mcsm_event_sink(&self, task_id: &str) -> McsmEventSink {
+        let state = Arc::clone(&self.state);
+        let id = task_id.to_string();
+        Arc::new(move |event: McsmEvent| {
+            let detail = event.message.clone();
+            state.update_runtime(&id, |runtime| match event.kind {
+                McsmEventKind::Started => runtime.start_step(event.step, detail.clone()),
+                McsmEventKind::Finished => runtime.finish_step(event.step, detail.clone()),
+                McsmEventKind::Failed => runtime.fail_step(event.step, detail.clone()),
+                McsmEventKind::Retry => {
+                    runtime.retry_step(event.step, detail.clone(), event.attempt)
+                }
+                McsmEventKind::Info => runtime.current_detail = Some(detail.clone()),
+            });
+            match event.kind {
+                McsmEventKind::Failed => tracing::error!(
+                    task_id = %id,
+                    step = event.step,
+                    "{}",
+                    event.message
+                ),
+                McsmEventKind::Retry => tracing::warn!(
+                    task_id = %id,
+                    step = event.step,
+                    attempt = event.attempt,
+                    "{}",
+                    event.message
+                ),
+                _ => tracing::info!(
+                    task_id = %id,
+                    step = event.step,
+                    "{}",
+                    event.message
+                ),
+            }
+        })
     }
 
     async fn execute_task(
@@ -387,6 +428,8 @@ impl Engine {
             runtime.last_error = None;
             runtime.progress = None;
             runtime.sha256 = None;
+            runtime.prepare_steps();
+            runtime.start_step("check", "正在解析版本来源");
         });
         tracing::info!(
             task_id = %task.id,
@@ -428,6 +471,10 @@ impl Engine {
             runtime.rate_limit_remaining = artifact.rate_limit_remaining;
             runtime.used_cache = artifact.from_cache;
             runtime.last_error = None;
+            runtime.finish_step(
+                "check",
+                format!("已解析 {} · {}", latest_version, latest_asset),
+            );
         });
         tracing::info!(
             task_id = %task.id,
@@ -450,7 +497,9 @@ impl Engine {
             return Ok(());
         }
 
-        let mcsm = McsmClient::new(&config.mcsm).context("MCSM 客户端初始化失败")?;
+        let mcsm = McsmClient::new(&config.mcsm)
+            .context("MCSM 客户端初始化失败")?
+            .with_events(self.mcsm_event_sink(&task.id));
         let temp_dir = tempfile::Builder::new()
             .prefix("mcsm-auto-deployer-")
             .tempdir()
@@ -460,6 +509,7 @@ impl Engine {
 
         self.state.update_runtime(&task.id, |runtime| {
             runtime.phase = TaskPhase::Downloading;
+            runtime.start_step("download", format!("正在下载 {}", artifact.asset_name));
             runtime.progress = Some(DownloadProgress {
                 downloaded: 0,
                 total: if artifact.size > 0 {
@@ -514,11 +564,22 @@ impl Engine {
 
         self.state.update_runtime(&task.id, |runtime| {
             runtime.phase = TaskPhase::Verifying;
+            runtime.finish_step(
+                "download",
+                format!("下载完成 · {}", format_bytes(download.bytes)),
+            );
+            runtime.start_step("verify", "正在校验 SHA-256");
             runtime.progress = Some(DownloadProgress {
                 downloaded: download.bytes,
                 total: Some(download.bytes),
                 percent: 100.0,
             });
+        });
+        self.state.update_runtime(&task.id, |runtime| {
+            runtime.finish_step(
+                "verify",
+                format!("SHA-256 校验通过 · {}", short_hash(&download.sha256)),
+            );
         });
         tracing::info!(
             task_id = %task.id,
@@ -530,6 +591,7 @@ impl Engine {
         if task.cleanup_old {
             self.state.update_runtime(&task.id, |runtime| {
                 runtime.phase = TaskPhase::Cleaning;
+                runtime.start_step("cleanup", "列出目标目录并匹配旧文件");
                 runtime.progress = None;
             });
             let previous = self.state.runtime_snapshot(&task.id).unwrap_or_default();
@@ -544,15 +606,27 @@ impl Engine {
                 .cleanup_old_remote_files(&mcsm, task, &artifact, tracked.as_deref())
                 .await
                 .context("清理旧版远程文件失败")?;
+            self.state.update_runtime(&task.id, |runtime| {
+                if deleted.is_empty() {
+                    runtime.finish_step("cleanup", "没有需要清理的旧文件");
+                } else {
+                    runtime.finish_step("cleanup", format!("已删除 {} 个旧文件", deleted.len()));
+                }
+            });
             tracing::info!(
                 task_id = %task.id,
                 deleted = deleted.len(),
                 "旧版远程文件清理完成"
             );
+        } else {
+            self.state.update_runtime(&task.id, |runtime| {
+                runtime.skip_step("cleanup", "未启用旧版清理");
+            });
         }
 
         self.state.update_runtime(&task.id, |runtime| {
             runtime.phase = TaskPhase::Uploading;
+            runtime.start_step("credential", "准备申请上传凭证");
             runtime.progress = None;
         });
         tracing::info!(
@@ -574,6 +648,9 @@ impl Engine {
         );
 
         self.state.update_runtime(&task.id, |runtime| {
+            if upload.uploaded_path == upload.final_path {
+                runtime.skip_step("rename", "目标保留上传文件名，无需重命名");
+            }
             runtime.current_version = Some(latest_version.clone());
             runtime.deployed_asset = Some(latest_asset.clone());
             runtime.deployed_remote_path = Some(upload.final_path.clone());
@@ -590,6 +667,7 @@ impl Engine {
         if task.restart && !suppress_restart {
             self.state.update_runtime(&task.id, |runtime| {
                 runtime.phase = TaskPhase::Restarting;
+                runtime.start_step("restart", "准备调用 MCSM 重启实例");
             });
             let mode = task.restart_mode(config.mcsm.restart_mode);
             tracing::info!(
@@ -613,18 +691,23 @@ impl Engine {
         } else if suppress_restart {
             self.state.update_runtime(&task.id, |runtime| {
                 runtime.restart_deferred = true;
+                runtime.skip_step("restart", "已跳过逐任务重启，等待统一重启");
             });
             tracing::info!(
                 task_id = %task.id,
                 "文件更新完成，已跳过逐任务重启，等待统一重启"
             );
         } else {
+            self.state.update_runtime(&task.id, |runtime| {
+                runtime.skip_step("restart", "任务未启用自动重启");
+            });
             tracing::info!(task_id = %task.id, "任务已关闭自动重启，文件更新完成");
         }
 
         self.state.update_runtime(&task.id, |runtime| {
             runtime.phase = TaskPhase::Success;
             runtime.progress = None;
+            runtime.current_detail = Some("部署完成".to_string());
         });
         tracing::info!(
             task_id = %task.id,
@@ -706,6 +789,26 @@ impl Engine {
 
 fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+fn short_hash(hash: &str) -> &str {
+    let end = hash.len().min(12);
+    &hash[..end]
 }
 
 fn join_posix(dir: &str, name: &str) -> String {

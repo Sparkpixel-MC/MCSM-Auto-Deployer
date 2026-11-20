@@ -13,7 +13,8 @@ use reqwest::{Client, Method, Response, Url};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::path::Path;
-use std::time::Duration;
+use std::sync::{Arc, LazyLock};
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -36,13 +37,38 @@ pub enum McsmError {
     MissingUploadAddress,
 }
 
+/// Internal progress events emitted by the MCSM client. The engine uses these
+/// to render the per-task deployment timeline without coupling the client to
+/// the web layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McsmEventKind {
+    Started,
+    Finished,
+    Failed,
+    Retry,
+    Info,
+}
+
 #[derive(Debug, Clone)]
+pub struct McsmEvent {
+    pub step: &'static str,
+    pub kind: McsmEventKind,
+    pub message: String,
+    pub attempt: u32,
+}
+
+pub type McsmEventSink = Arc<dyn Fn(McsmEvent) + Send + Sync>;
+
+#[derive(Clone)]
 pub struct McsmClient {
     http: Client,
     base: Url,
     api_key: String,
     daemon_scheme: String,
     timeout: Duration,
+    api_min_interval: Duration,
+    api_retry_attempts: u32,
+    events: Option<McsmEventSink>,
 }
 
 impl McsmClient {
@@ -63,6 +89,8 @@ impl McsmClient {
             .clone()
             .unwrap_or_else(|| base.scheme().to_string());
         let timeout = Duration::from_secs(config.timeout_secs.clamp(10, 1_800));
+        let api_min_interval = Duration::from_millis(config.api_min_interval_ms.min(5_000));
+        let api_retry_attempts = config.api_retry_attempts.clamp(1, 10);
         let http = Client::builder()
             .connect_timeout(Duration::from_secs(20))
             .timeout(timeout)
@@ -75,7 +103,40 @@ impl McsmClient {
             api_key: key.to_string(),
             daemon_scheme,
             timeout,
+            api_min_interval,
+            api_retry_attempts,
+            events: None,
         })
+    }
+
+    pub fn with_events(mut self, sink: McsmEventSink) -> Self {
+        self.events = Some(sink);
+        self
+    }
+
+    fn emit(&self, step: &'static str, kind: McsmEventKind, message: impl Into<String>) {
+        let message = message.into();
+        tracing::debug!(step, ?kind, %message, "MCSM 操作事件");
+        if let Some(sink) = &self.events {
+            sink(McsmEvent {
+                step,
+                kind,
+                message,
+                attempt: 0,
+            });
+        }
+    }
+
+    fn emit_retry(&self, step: &'static str, attempt: u32, wait: Duration, message: String) {
+        tracing::debug!(step, attempt, wait_ms = wait.as_millis(), %message, "MCSM 重试事件");
+        if let Some(sink) = &self.events {
+            sink(McsmEvent {
+                step,
+                kind: McsmEventKind::Retry,
+                message,
+                attempt,
+            });
+        }
     }
 
     fn panel_url(&self, path: &str, query: &[(&str, &str)]) -> Result<Url, McsmError> {
@@ -112,12 +173,50 @@ impl McsmClient {
         body: Option<Value>,
     ) -> Result<T, McsmError> {
         let url = self.panel_url(path, query)?;
-        let mut request = self.panel_request(method, url);
-        if let Some(body) = body {
-            request = request.json(&body);
+        let attempts = self.api_retry_attempts.max(1);
+        for attempt in 1..=attempts {
+            wait_for_panel_slot(self.api_min_interval).await;
+            let mut request = self.panel_request(method.clone(), url.clone());
+            if let Some(body) = body.as_ref() {
+                request = request.json(body);
+            }
+            tracing::debug!(operation = path, method = %method, attempt, "调用 MCSM 面板 API");
+            let response = request.send().await.map_err(sanitize_network_error)?;
+            match self.parse_envelope(response, path).await {
+                Ok(value) => {
+                    if attempt > 1 {
+                        tracing::info!(operation = path, attempt, "MCSM 面板 API 重试成功");
+                    }
+                    return Ok(value);
+                }
+                Err(error) => {
+                    if let Some(wait) = cooldown_delay(&error) {
+                        if attempt < attempts {
+                            let step = step_for_operation(path);
+                            let message = format!(
+                                "MCSM 冷却中，等待 {} ms 后重试（{attempt}/{attempts}）",
+                                wait.as_millis()
+                            );
+                            self.emit_retry(step, attempt, wait, message);
+                            tracing::warn!(
+                                operation = path,
+                                attempt,
+                                max_attempts = attempts,
+                                wait_ms = wait.as_millis(),
+                                "MCSM API 冷却，等待后重试"
+                            );
+                            tokio::time::sleep(wait).await;
+                            continue;
+                        }
+                    }
+                    return Err(error);
+                }
+            }
         }
-        let response = request.send().await.map_err(sanitize_network_error)?;
-        self.parse_envelope(response, path).await
+        Err(McsmError::Api {
+            status: 0,
+            message: format!("{path}: 重试次数已用尽"),
+        })
     }
 
     async fn parse_envelope<T: DeserializeOwned>(
@@ -202,25 +301,36 @@ impl McsmClient {
         // 面板只负责签发一次性传输凭证，不接收文件字节。查询参数和
         // X-Requested-With 头都是 MCSM 文档要求的认证组成部分。
         // ────────────────────────────────────────────────────────────────────
-        let url = self.panel_url(
-            "api/files/upload",
-            &[
-                ("upload_dir", &target.upload_dir),
-                ("daemonId", daemon_id),
-                ("uuid", instance_uuid),
-            ],
-        )?;
-        tracing::debug!(
-            upload_dir = %target.upload_dir,
-            "向 MCSM 面板申请一次性上传凭证"
+        self.emit(
+            "credential",
+            McsmEventKind::Started,
+            format!("向面板申请上传凭证 → {}", target.upload_dir),
         );
-        let response = self
-            .panel_request(Method::POST, url)
-            .send()
-            .await
-            .map_err(sanitize_network_error)?;
-        self.parse_envelope::<UploadPassport>(response, "api/files/upload")
-            .await
+        let result = self
+            .request_json::<UploadPassport>(
+                Method::POST,
+                "api/files/upload",
+                &[
+                    ("upload_dir", &target.upload_dir),
+                    ("daemonId", daemon_id),
+                    ("uuid", instance_uuid),
+                ],
+                None,
+            )
+            .await;
+        match &result {
+            Ok(_) => self.emit(
+                "credential",
+                McsmEventKind::Finished,
+                "上传凭证已获取，准备直传 Daemon",
+            ),
+            Err(error) => self.emit(
+                "credential",
+                McsmEventKind::Failed,
+                format!("申请上传凭证失败: {error}"),
+            ),
+        }
+        result
     }
 
     /// Build the direct daemon endpoint from either modern (addr/password) or
@@ -306,12 +416,17 @@ impl McsmClient {
             .map_err(|error| McsmError::File(format!("无法构造 multipart 文件字段: {error}")))?;
         let form = reqwest::multipart::Form::new().part("file", part);
 
+        self.emit(
+            "daemon_upload",
+            McsmEventKind::Started,
+            format!("开始直传 Daemon（{}，{}）", file_name, format_bytes(size)),
+        );
         tracing::info!(
             file_name = %file_name,
             bytes = size,
             "文件直传 MCSM Daemon（不经过面板 API）"
         );
-        let response = self
+        let response = match self
             .http
             .post(url.clone())
             .header("X-Requested-With", "XMLHttpRequest")
@@ -319,28 +434,67 @@ impl McsmClient {
             .multipart(form)
             .send()
             .await
-            .map_err(sanitize_network_error)?;
+        {
+            Ok(response) => response,
+            Err(error) => {
+                let error = sanitize_network_error(error);
+                self.emit(
+                    "daemon_upload",
+                    McsmEventKind::Failed,
+                    format!("Daemon 直传失败: {error}"),
+                );
+                return Err(error);
+            }
+        };
         let status = response.status();
-        let body = response.text().await.map_err(sanitize_network_error)?;
+        let body = match response.text().await {
+            Ok(body) => body,
+            Err(error) => {
+                let error = sanitize_network_error(error);
+                self.emit(
+                    "daemon_upload",
+                    McsmEventKind::Failed,
+                    format!("读取 Daemon 响应失败: {error}"),
+                );
+                return Err(error);
+            }
+        };
         if !status.is_success() {
-            return Err(McsmError::Upload {
+            let error = McsmError::Upload {
                 status: status.as_u16(),
                 message: truncate(&body, 300),
-            });
+            };
+            self.emit(
+                "daemon_upload",
+                McsmEventKind::Failed,
+                format!("Daemon 直传失败: {error}"),
+            );
+            return Err(error);
         }
         // Some daemon versions answer with a JSON envelope even on 200.
         if body.trim_start().starts_with('{') {
             if let Ok(value) = serde_json::from_str::<Value>(&body) {
                 if let Some(inner_status) = value.get("status").and_then(Value::as_i64) {
                     if inner_status != 200 {
-                        return Err(McsmError::Upload {
+                        let error = McsmError::Upload {
                             status: status.as_u16(),
                             message: truncate(&body, 300),
-                        });
+                        };
+                        self.emit(
+                            "daemon_upload",
+                            McsmEventKind::Failed,
+                            format!("Daemon 直传失败: {error}"),
+                        );
+                        return Err(error);
                     }
                 }
             }
         }
+        self.emit(
+            "daemon_upload",
+            McsmEventKind::Finished,
+            format!("Daemon 直传完成（{}）", format_bytes(size)),
+        );
         Ok(size)
     }
 
@@ -354,15 +508,32 @@ impl McsmClient {
         let request = MoveFilesRequest {
             targets: vec![(source, target)],
         };
-        let _: Value = self
-            .request_json(
+        self.emit(
+            "rename",
+            McsmEventKind::Started,
+            format!("移动上传文件 → {target}"),
+        );
+        let result = self
+            .request_json::<Value>(
                 Method::PUT,
                 "api/files/move",
                 &[("daemonId", daemon_id), ("uuid", instance_uuid)],
                 Some(serde_json::to_value(request).map_err(McsmError::Decode)?),
             )
-            .await?;
-        Ok(())
+            .await;
+        match &result {
+            Ok(_) => self.emit(
+                "rename",
+                McsmEventKind::Finished,
+                format!("文件已移动到 {target}"),
+            ),
+            Err(error) => self.emit(
+                "rename",
+                McsmEventKind::Failed,
+                format!("移动文件失败: {error}"),
+            ),
+        }
+        result.map(|_| ())
     }
 
     /// Full upload flow: passport → direct daemon upload → optional atomic
@@ -461,14 +632,36 @@ impl McsmClient {
     ) -> Result<(), McsmError> {
         match mode {
             RestartMode::Restart => {
+                self.emit("restart", McsmEventKind::Started, "调用 MCSM 重启实例");
                 tracing::info!("调用 MCSM 重启实例");
-                self.instance_action("restart", daemon_id, instance_uuid)
-                    .await
+                let result = self
+                    .instance_action("restart", daemon_id, instance_uuid)
+                    .await;
+                match &result {
+                    Ok(()) => self.emit("restart", McsmEventKind::Finished, "MCSM 已受理重启指令"),
+                    Err(error) => self.emit(
+                        "restart",
+                        McsmEventKind::Failed,
+                        format!("重启实例失败: {error}"),
+                    ),
+                }
+                result
             }
             RestartMode::StopThenOpen => {
+                self.emit(
+                    "restart",
+                    McsmEventKind::Started,
+                    "调用 MCSM 停止实例，等待停止后重新启动",
+                );
                 tracing::info!("调用 MCSM 停止实例，等待停止后重新启动");
-                self.instance_action("stop", daemon_id, instance_uuid)
-                    .await?;
+                if let Err(error) = self.instance_action("stop", daemon_id, instance_uuid).await {
+                    self.emit(
+                        "restart",
+                        McsmEventKind::Failed,
+                        format!("停止实例失败: {error}"),
+                    );
+                    return Err(error);
+                }
                 let deadline =
                     tokio::time::Instant::now() + self.timeout.min(Duration::from_secs(90));
                 loop {
@@ -480,12 +673,27 @@ impl McsmClient {
                         }
                     }
                     if tokio::time::Instant::now() >= deadline {
+                        self.emit("restart", McsmEventKind::Failed, "实例在超时时间内仍未停止");
                         return Err(McsmError::StopTimeout);
                     }
                     tokio::time::sleep(Duration::from_millis(1_500)).await;
                 }
                 tracing::info!("实例已停止，调用 MCSM 启动实例");
-                self.instance_action("open", daemon_id, instance_uuid).await
+                self.emit(
+                    "restart",
+                    McsmEventKind::Info,
+                    "实例已停止，调用 MCSM 启动实例",
+                );
+                let result = self.instance_action("open", daemon_id, instance_uuid).await;
+                match &result {
+                    Ok(()) => self.emit("restart", McsmEventKind::Finished, "实例已重新启动"),
+                    Err(error) => self.emit(
+                        "restart",
+                        McsmEventKind::Failed,
+                        format!("启动实例失败: {error}"),
+                    ),
+                }
+                result
             }
         }
     }
@@ -547,6 +755,93 @@ impl McsmClient {
             )
             .await?;
         Ok(())
+    }
+}
+
+/// MCSM's file routes use per-operation cooldowns. All panel calls share a
+/// single pacing gate inside this process so concurrent tasks cannot burst the
+/// same endpoint at once.
+static PANEL_GATE: LazyLock<tokio::sync::Mutex<Option<Instant>>> =
+    LazyLock::new(|| tokio::sync::Mutex::new(None));
+
+async fn wait_for_panel_slot(interval: Duration) {
+    let mut last = PANEL_GATE.lock().await;
+    if let Some(previous) = *last {
+        let elapsed = previous.elapsed();
+        if elapsed < interval {
+            let wait = interval - elapsed;
+            tracing::debug!(
+                wait_ms = wait.as_millis(),
+                "MCSM 面板 API 节流等待，避免触发操作冷却"
+            );
+            tokio::time::sleep(wait).await;
+        }
+    }
+    *last = Some(Instant::now());
+}
+
+fn cooldown_delay(error: &McsmError) -> Option<Duration> {
+    let McsmError::Api { status, message } = error else {
+        return None;
+    };
+    if *status != 500 && *status != 429 {
+        return None;
+    }
+    let lower = message.to_ascii_lowercase();
+    if !message.contains("冷却") && !lower.contains("cooldown") && !message.contains("请稍后")
+    {
+        return None;
+    }
+    let seconds = cooldown_seconds(message).unwrap_or(1);
+    Some(Duration::from_millis((seconds.saturating_add(1)) * 1_000))
+}
+
+fn cooldown_seconds(message: &str) -> Option<u64> {
+    let after = message.split('约').nth(1)?;
+    let mut digits = String::new();
+    let mut started = false;
+    for character in after.chars() {
+        if character.is_ascii_digit() {
+            started = true;
+            digits.push(character);
+        } else if started {
+            if character == '秒' {
+                return digits.parse().ok();
+            }
+            if !character.is_whitespace() {
+                return None;
+            }
+        }
+    }
+    None
+}
+
+fn step_for_operation(path: &str) -> &'static str {
+    if path.starts_with("api/files/upload") {
+        "credential"
+    } else if path.starts_with("api/files/move") {
+        "rename"
+    } else if path.starts_with("api/files") {
+        "cleanup"
+    } else if path.contains("protected_instance") || path.starts_with("api/instance") {
+        "restart"
+    } else {
+        "api"
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
     }
 }
 
@@ -624,6 +919,8 @@ mod tests {
             restart_mode: RestartMode::Restart,
             daemon_scheme: Some("http".to_string()),
             accept_invalid_certs: false,
+            api_min_interval_ms: 0,
+            api_retry_attempts: 4,
         }
     }
 
@@ -706,5 +1003,79 @@ mod tests {
             }
             Err(error) => assert!(false, "wss URL failed: {error}"),
         }
+    }
+
+    #[test]
+    fn cooldown_error_waits_until_operation_is_available() {
+        let error = McsmError::Api {
+            status: 500,
+            message: "api/files/move: 此操作冷却中，约 0 秒后可继续操作！".to_string(),
+        };
+        assert_eq!(cooldown_delay(&error), Some(Duration::from_secs(1)));
+        assert_eq!(cooldown_seconds("约 3 秒后可继续操作"), Some(3));
+    }
+
+    #[tokio::test]
+    async fn panel_request_retries_after_cooldown_response() {
+        use axum::{extract::State, routing::put, Json, Router};
+        use serde_json::json;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let state = Arc::clone(&attempts);
+        let app = Router::new()
+            .route(
+                "/api/files/move",
+                put(|State(attempts): State<Arc<AtomicUsize>>| async move {
+                    let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        Json(json!({
+                            "status": 500,
+                            "data": "api/files/move: 此操作冷却中，约 0 秒后可继续操作！"
+                        }))
+                    } else {
+                        Json(json!({ "status": 200, "data": { "ok": true } }))
+                    }
+                }),
+            )
+            .with_state(state);
+        let listener = match tokio::net::TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(error) => {
+                assert!(false, "bind test listener failed: {error}");
+                return;
+            }
+        };
+        let address = match listener.local_addr() {
+            Ok(address) => address,
+            Err(error) => {
+                assert!(false, "listener address failed: {error}");
+                return;
+            }
+        };
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        let mut config = test_config();
+        config.base_url = format!("http://{address}");
+        config.api_min_interval_ms = 0;
+        let client = match McsmClient::new(&config) {
+            Ok(client) => client,
+            Err(error) => {
+                assert!(false, "test client construction failed: {error}");
+                return;
+            }
+        };
+        let result = client
+            .request_json::<Value>(
+                Method::PUT,
+                "api/files/move",
+                &[],
+                Some(json!({ "targets": [] })),
+            )
+            .await;
+        assert!(result.is_ok(), "retry should succeed: {result:?}");
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 }
